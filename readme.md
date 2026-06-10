@@ -87,19 +87,6 @@
   - Word文档✅
 - 分析聊天数据，做成[可视化年报](https://memotrace.cn/demo.html)
 
-## 2024年度报告
-
-### 预览
-
-[个人年度报告在线预览](https://memotrace.cn/2024/single/)
-
-[双人年度报告在线预览](https://memotrace.cn/2024Report/)
-
-手机可以扫码观看
-
-<img src="/doc/images/qrcode0.png" height="300px"/>
-
-![](/doc/images/demo1.gif)
 
 ### 源码地址
 
@@ -187,27 +174,6 @@
 如果您是一名开发者，有新的想法或建议，欢迎[fork](https://github.com/LC044/WeChatMsg/forks)
 该项目并发起[PR](https://github.com/LC044/WeChatMsg/pulls)，我将把您的名字写入贡献者名单中
 
-# 联系方式
-
-如果您遇到了问题，可以添加QQ群寻求帮助，由于精力有限，不能回答所有问题，所以还请您仔细阅读文档之后再考虑是否入群
-
-## 加群方式
-
-1. 关注官方公众号，回复：联系方式
-2. QQ扫码入群
-
-后续更新将会在公众号同步发布
-<div>
-  <img src="https://blog.lc044.love/static/img/b8df8c594a4cabaa0a62025767a3cfd9.weixin.webp">
-</div>
-
-## AI交流
-
-欢迎对“前言”中AI感兴趣的加入QQ群（不负责任何答疑），让我们一起探讨新技术，钻研新方案，将科技的力量融入生活，打造出一个真正具有情感的个人AI
-
-<div>
-  <img src="doc/images/ai_qq.jpg" height="200">
-</div>
 
 # License
 
