@@ -112,7 +112,7 @@ class DocxExporter(ExporterBase):
                     logger.error(image_path)
                     logger.error(traceback.format_exc())
         else:
-            content.paragraphs[0].add_run('【图片丢失】')
+            content.paragraphs[0].add_run('[图片丢失]')
 
     def refermsg(self, doc, message: QuoteMessage):
         """
@@ -272,7 +272,7 @@ class DocxExporter(ExporterBase):
         return content_cell
 
     def export(self):
-        print(f"【开始导出 DOCX {self.contact.remark}】")
+        print(f"开始导出 DOCX: {self.contact.remark}")
         origin_path = self.origin_path
         messages = self.database.get_messages(self.contact.wxid, time_range=self.time_range)
         total_steps = len(messages)
@@ -333,5 +333,5 @@ class DocxExporter(ExporterBase):
                     pass
                 newdoc()
         self.update_progress_callback(1)
-        print(f"【完成导出 DOCX {self.contact.remark}】")
+        print(f"完成导出 DOCX: {self.contact.remark}")
         self.finish_callback(self.exporter_id)

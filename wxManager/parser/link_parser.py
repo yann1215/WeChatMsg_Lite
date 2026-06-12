@@ -200,7 +200,7 @@ def parser_business(xml_content):
         result.update(
             {
                 'type': 1,
-                'text': '【名片解析错误】'
+                'text': '[名片解析错误]'
             }
         )
     finally:
@@ -386,7 +386,7 @@ def parser_record_item(recorditem, output_dir, wxid, msg_time, level=0):
                     avatar_src=item.get('sourceheadurl'),
                     status=0,
                     xml_content='',
-                    content='【转发语音不可播放】'
+                    content='[转发语音不可播放]'
                 )
             )
         elif type_ == '4':
@@ -537,35 +537,88 @@ def parser_record_item(recorditem, output_dir, wxid, msg_time, level=0):
     return result
 
 
+# 给 parser_merged_messages 增加清洗函数
+_XML_DECL_RE = re.compile(r"<\?xml[^?]*\?>", re.I)
+_BAD_XML_CHAR_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+_BAD_AMP_RE = re.compile(r"&(?!#\d+;|#x[0-9a-fA-F]+;|[A-Za-z][A-Za-z0-9]+;)")
+_CDATA_RE = re.compile(r"<!\[CDATA\[[\s\S]*?\]\]>")
+
+
+def _escape_bad_amp_outside_cdata(s: str) -> str:
+    """只修复 CDATA 外面的裸 &，避免破坏 recorditem 里的嵌套 XML。"""
+    parts = []
+    last = 0
+
+    for m in _CDATA_RE.finditer(s):
+        parts.append(_BAD_AMP_RE.sub("&amp;", s[last:m.start()]))
+        parts.append(m.group(0))
+        last = m.end()
+
+    parts.append(_BAD_AMP_RE.sub("&amp;", s[last:]))
+    return "".join(parts)
+
+
+def clean_wechat_xml(raw_xml: str) -> str:
+    s = str(raw_xml or "").strip().lstrip("\ufeff")
+
+    # 只保留真正的 <msg>...</msg>，去掉前面的 wxid_xxx:、日志前缀等
+    m = re.search(r"<msg\b[\s\S]*?</msg>", s)
+    if m:
+        s = m.group(0)
+    else:
+        # 有些情况下可能只有 <appmsg>...</appmsg>
+        m = re.search(r"<appmsg\b[\s\S]*?</appmsg>", s)
+        if m:
+            s = f"<msg>{m.group(0)}</msg>"
+
+    # 删除任何位置的 <?xml version="1.0"?>
+    # XML declaration 只能出现在整个文档最开头，不能出现在 <msg> 里面
+    s = _XML_DECL_RE.sub("", s)
+
+    # 清除 XML 1.0 不允许的控制字符，比如 \x7f
+    s = _BAD_XML_CHAR_RE.sub("", s)
+
+    # 修复裸 &，但不要破坏 CDATA
+    s = _escape_bad_amp_outside_cdata(s)
+
+    return s
+
+
+def xml_value(value, default=""):
+    """兼容 xmltodict 返回 str / dict / None 的情况。"""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value.get("#text") or value.get("#cdata-section") or default
+    return str(value)
+
+
 def parser_merged_messages(xml: str, output_dir, wxid, msg_time, level=0):
     try:
-        try:
-            data_dic = xmltodict.parse(xml).get('msg', {})
-        except:
-            new_xml1 = html.unescape(xml)
-            new_xml2 = new_xml1.replace('&', '&amp;')
-            # xml = xml.replace('&#x20;', ' ').replace('&#15;', '').replace('&#x0A;', '\n').replace('\xa0',' ')  # 搞不懂这帮人在干嘛，有些转义，有些不转义
-            # html.unescape(xml)
-            data_dic = xmltodict.parse(new_xml2).get('msg', {})
-        app_msg_dic = data_dic.get('appmsg', {})
-        desc = app_msg_dic.get('des', '')
-        title = app_msg_dic.get('title', '')
-        recorditem = app_msg_dic.get('recorditem', '')
+        clean_xml = clean_wechat_xml(xml)
+        data_dic = xmltodict.parse(clean_xml).get("msg", {})
+
+        app_msg_dic = data_dic.get("appmsg", {})
+        desc = xml_value(app_msg_dic.get("des"))
+        title = xml_value(app_msg_dic.get("title"))
+        recorditem = xml_value(app_msg_dic.get("recorditem"))
+
         return {
-            'title': title,  # 标题
-            'desc': desc,  # 描述
-            'messages': parser_record_item(recorditem, output_dir, wxid, msg_time, level),  # List[dict] 消息内容
+            "title": title,
+            "desc": desc,
+            "messages": parser_record_item(recorditem, output_dir, wxid, msg_time, level),
         }
-    except:
-        logger.error(xml)
-        # logger.error(new_xml1)
-        # logger.error(new_xml2)
+
+    except Exception:
+        logger.error("合并转发的消息解析失败，原始 xml 前 500 字符：%r", str(xml)[:500])
         logger.error(traceback.format_exc())
-        # raise ValueError('合并转发的消息解析失败')
+
         return {
-            'title': '解析失败',  # 标题
-            'desc': '合并转发的消息解析失败',  # 描述
-            'messages': []
+            "title": "解析失败",
+            "desc": "合并转发的消息解析失败",
+            "messages": []
         }
 
 
@@ -630,7 +683,7 @@ def parser_position(xml_content):
         result.update(
             {
                 'type': 1,
-                'text': '【位置分享解析错误】'
+                'text': '[位置分享解析错误]'
             }
         )
     finally:
@@ -681,7 +734,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【图片消息】",
+        #         "refer_text": f"{displayname}：[图片消息]",
         #     }
         # elif refermsg_type == 34:
         #     return {
@@ -689,7 +742,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【语音消息】",
+        #         "refer_text": f"{displayname}：[语音消息]",
         #     }
         # elif refermsg_type == 43:
         #     return {
@@ -697,7 +750,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【视频消息】",
+        #         "refer_text": f"{displayname}：[视频消息]",
         #     }
         # elif refermsg_type == 47:
         #     return {
@@ -705,7 +758,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【表情包】",
+        #         "refer_text": f"{displayname}：[表情包]",
         #     }
         # elif refermsg_type == 49:
         #     content = data.get('refermsg', {}).get('content', '')
@@ -733,7 +786,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【名片分享】",
+        #         "refer_text": f"{displayname}：[名片分享]",
         #     }
         # elif refermsg_type == 42:
         #     return {
@@ -741,7 +794,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【名片分享】",
+        #         "refer_text": f"{displayname}：[名片分享]",
         #     }
         # elif refermsg_type == 48:
         #     position_dict = xmltodict.parse(data.get('refermsg', {}).get('content', '')).get('msg')
@@ -759,7 +812,7 @@ def parser_reply(xml_content):
         #         "text": title,
         #         'svrid': data.get('refermsg', {}).get('svrid', 0),
         #         'refermsg_type': refermsg_type,
-        #         "refer_text": f"{displayname}：【其他消息】",
+        #         "refer_text": f"{displayname}：[其他消息]",
         #     }
     except:
         logger.error(f'{xml_content}\n\n引用消息解析错误\n{traceback.format_exc()}')
@@ -792,7 +845,7 @@ def parser_transfer(xml_content):
         result.update(
             {
                 'type': 1,
-                'text': '【位置分享解析错误】'
+                'text': '[位置分享解析错误]'
             }
         )
     finally:
@@ -817,7 +870,7 @@ def parser_red_envelop(xml_content):
         result.update(
             {
                 'type': 1,
-                'text': '【位置分享解析错误】'
+                'text': '[位置分享解析错误]'
             }
         )
     finally:

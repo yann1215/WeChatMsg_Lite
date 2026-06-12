@@ -224,7 +224,7 @@ class FileMessage(Message):
         return True
 
     def to_text(self):
-        return f'【文件】{self.file_name} {self.get_file_size()} {self.path} {self.file_type} {self.md5}'
+        return f'[文件]{self.file_name} {self.get_file_size()} {self.path} {self.file_type} {self.md5}'
 
 
 @dataclass
@@ -239,7 +239,7 @@ class ImageMessage(FileMessage):
         return data
 
     def to_text(self):
-        return f'【图片】'
+        return f'[图片]'
 
 
 @dataclass
@@ -260,7 +260,7 @@ class EmojiMessage(ImageMessage):
         return data
 
     def to_text(self):
-        return f'【表情包】 {self.description}'
+        return f'[表情包] {self.description}'
 
 
 @dataclass
@@ -271,7 +271,7 @@ class VideoMessage(FileMessage):
     raw_md5: str
 
     def to_text(self):
-        return '【视频】'
+        return '[视频]'
 
     def to_json(self) -> dict:
         data = super().to_json()
@@ -318,7 +318,7 @@ class AudioMessage(FileMessage):
 
     def to_text(self):
         # return f'{self.server_id}\n{self.type}\n{xmltodict.parse(self.xml_content)}'
-        return f'【语音】{self.audio_text}'
+        return f'[语音]{self.audio_text}'
 
 
 @dataclass
@@ -334,7 +334,7 @@ class LinkMessage(Message):
     app_id: str  # app ip
 
     def to_text(self):
-        return f'''【分享链接】
+        return f'''[分享链接]
 标题：{self.title}
 描述：{self.description}
 链接: {self.href}
@@ -372,7 +372,7 @@ class WeChatVideoMessage(Message):
     height: int  # 视频高度
 
     def to_text(self):
-        return f'''【视频号】
+        return f'''[视频号]
 描述: {self.description}
 发布者: {self.publisher_nickname}
 '''
@@ -401,7 +401,7 @@ class MergedMessage(Message):
     level: int  # 嵌套层数
 
     def to_text(self):
-        res = f'【合并转发的聊天记录】\n\n'
+        res = f'[合并转发的聊天记录]\n\n'
         for message in self.messages:
             res += f"{' ' * self.level * 4}- {message.str_time} {message.display_name}: {message.to_text()}\n"
         return res
@@ -426,7 +426,7 @@ class VoipMessage(Message):
     duration: int
 
     def to_text(self):
-        return f'【音视频通话】\n{self.display_content}'
+        return f'[音视频通话]\n{self.display_content}'
 
     def to_json(self) -> dict:
         data = super().to_json()
@@ -450,7 +450,7 @@ class PositionMessage(Message):
     scale: float  # 缩放率
 
     def to_text(self):
-        return f'''【位置分享】
+        return f'''[位置分享]
 坐标: ({self.x},{self.y})
 名称: {self.poiname}
 标签: {self.label}
@@ -496,13 +496,13 @@ class BusinessCardMessage(Message):
 
     def to_text(self):
         if self.is_open_im:
-            return f'''【名片】
+            return f'''[名片]
 公司: {self.open_im_desc}
 昵称: {self.nickname}
 性别: {self._sex_name()}
 '''
         else:
-            return f'''【名片】
+            return f'''[名片]
 微信号:{self.alias}
 昵称: {self.nickname}
 签名: {self.sign}
@@ -551,7 +551,7 @@ class TransferMessage(Message):
         return text_info_map.get(self.pay_subtype, '未知')
 
     def to_text(self):
-        return f'''【{self.display_content()}】:{self.fee_desc}
+        return f'''[{self.display_content()}]:{self.fee_desc}
 备注: {self.pay_memo}
 '''
 
@@ -576,7 +576,7 @@ class RedEnvelopeMessage(Message):
     inner_type: int
 
     def to_text(self):
-        return f'''【红包】: {self.title}'''
+        return f'''[红包]: {self.title}'''
 
     def to_json(self) -> dict:
         data = super().to_json()
@@ -597,7 +597,7 @@ class FavNoteMessage(Message):
     record_item: str
 
     def to_text(self):
-        return f'''【笔记】
+        return f'''[笔记]
 {self.description}
 {self.record_item}
 '''

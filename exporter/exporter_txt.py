@@ -16,7 +16,7 @@ class TxtExporter(ExporterBase):
 
     def export(self):
         # 实现导出为txt的逻辑
-        print(f"【开始导出 TXT {self.contact.remark}】")
+        print(f"[开始导出 TXT {self.contact.remark}]")
         origin_path = self.origin_path
         os.makedirs(origin_path, exist_ok=True)
         filename = os.path.join(origin_path, self.contact.remark + '.txt')
@@ -33,5 +33,5 @@ class TxtExporter(ExporterBase):
         with open(filename, mode='w', newline='', encoding='utf-8') as f:
             f.write('\n\n'.join(txt_res))
         self.update_progress_callback(1)
-        print(f"【完成导出 TXT {self.contact.remark}】")
+        print(f"[完成导出 TXT {self.contact.remark}]")
         self.finish_callback(self.exporter_id)

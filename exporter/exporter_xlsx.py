@@ -106,7 +106,7 @@ class ExcelExporter(ExporterBase):
         from openpyxl.drawing.image import Image
         from openpyxl.utils import get_column_letter
         Image.MAX_IMAGE_PIXELS = None
-        print(f"【开始导出 XLSX {self.contact.remark}】")
+        print(f"开始导出 XLSX: {self.contact.remark}")
         os.makedirs(self.origin_path, exist_ok=True)
         filename = os.path.join(self.origin_path, f"{self.contact.remark}.xlsx")
         filename = get_new_filename(filename)
@@ -302,7 +302,7 @@ class ExcelExporter(ExporterBase):
             new_workbook.save(filename)
         self.update_progress_callback(1)
         self.finish_callback(self.exporter_id)
-        print(f"【完成导出 XLSX {self.contact.remark}】")
+        print(f"完成导出: XLSX {self.contact.remark}")
 
     def public_to_excel(self):
         from openpyxl.styles import Font
@@ -311,7 +311,7 @@ class ExcelExporter(ExporterBase):
         from openpyxl.utils import get_column_letter
         Image.MAX_IMAGE_PIXELS = None
 
-        print(f"【开始导出 XLSX {self.contact.remark}】")
+        print(f"开始导出 XLSX: {self.contact.remark}")
         os.makedirs(self.origin_path, exist_ok=True)
         filename = os.path.join(self.origin_path, f"{self.contact.remark}.xlsx")
         filename = get_new_filename(filename)
@@ -345,7 +345,7 @@ class ExcelExporter(ExporterBase):
             new_workbook.save(filename)
         self.update_progress_callback(1)
         self.finish_callback(self.exporter_id)
-        print(f"【完成导出 XLSX {self.contact.remark}】")
+        print(f"完成导出 XLSX: {self.contact.remark}")
 
     def wx_pay(self):
         from openpyxl.styles import Font
@@ -353,7 +353,7 @@ class ExcelExporter(ExporterBase):
         from openpyxl.drawing.image import Image
         from openpyxl.utils import get_column_letter
         Image.MAX_IMAGE_PIXELS = None
-        print(f"【开始导出 XLSX {self.contact.remark}】")
+        print(f"开始导出 XLSX: {self.contact.remark}")
         os.makedirs(self.origin_path, exist_ok=True)
         filename = os.path.join(self.origin_path, f"{self.contact.remark}.xlsx")
         filename = get_new_filename(filename)
@@ -403,7 +403,7 @@ class ExcelExporter(ExporterBase):
             new_workbook.save(filename)
         self.update_progress_callback(1)
         self.finish_callback(self.exporter_id)
-        print(f"【完成导出 XLSX {self.contact.remark}】")
+        print(f"完成导出 XLSX: {self.contact.remark}")
 
     def wx_collect(self):
         from openpyxl.styles import Font
@@ -412,7 +412,7 @@ class ExcelExporter(ExporterBase):
         from openpyxl.utils import get_column_letter
         Image.MAX_IMAGE_PIXELS = None
 
-        print(f"【开始导出 XLSX {self.contact.remark}】")
+        print(f"开始导出 XLSX: {self.contact.remark}")
         os.makedirs(self.origin_path, exist_ok=True)
         filename = os.path.join(self.origin_path, f"{self.contact.remark}.xlsx")
         filename = get_new_filename(filename)
@@ -453,7 +453,7 @@ class ExcelExporter(ExporterBase):
             new_workbook.save(filename)
         self.update_progress_callback(1)
         self.finish_callback(self.exporter_id)
-        print(f"【完成导出 XLSX {self.contact.remark}】")
+        print(f"完成导出 XLSX: {self.contact.remark}")
 
     def wx_sport(self):
         from openpyxl.styles import Font
@@ -463,7 +463,7 @@ class ExcelExporter(ExporterBase):
         Image.MAX_IMAGE_PIXELS = None
 
 
-        print(f"【开始导出 XLSX {self.contact.remark}】")
+        print(f"开始导出 XLSX: {self.contact.remark}")
         os.makedirs(self.origin_path, exist_ok=True)
         filename = os.path.join(self.origin_path, f"{self.contact.remark}.xlsx")
         filename = get_new_filename(filename)
@@ -510,7 +510,7 @@ class ExcelExporter(ExporterBase):
             new_workbook.save(filename)
         self.update_progress_callback(1)
         self.finish_callback(self.exporter_id)
-        print(f"【完成导出 XLSX {self.contact.remark}】")
+        print(f"完成导出 XLSX: {self.contact.remark}")
 
     def run(self):
         if self.contact.is_public():

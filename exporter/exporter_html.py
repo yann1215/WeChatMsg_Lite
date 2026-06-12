@@ -24,7 +24,7 @@ icon_files = {
 class HtmlExporter(ExporterBase):
 
     def export(self):
-        print(f"【开始导出 HTML {self.contact.remark}】")
+        print(f"[开始导出 HTML {self.contact.remark}]")
         f_name = '.html'
         filename = os.path.join(self.origin_path, f'{self.contact.remark}{f_name}')
         filename = get_new_filename(filename)
@@ -293,5 +293,5 @@ class HtmlExporter(ExporterBase):
             json.dump(html_json, f, ensure_ascii=False, indent=4)
 
         self.update_progress_callback(1)
-        print(f"【完成导出 HTML {self.contact.remark}】{len(messages)}")
+        print(f"[完成导出 HTML {self.contact.remark}]{len(messages)}")
         self.finish_callback(self.exporter_id)
