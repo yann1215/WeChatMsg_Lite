@@ -125,10 +125,9 @@ def run_msg(
 
     return {
         "ok": True,
-        "message": "导出完成",
+        "message": "导出成功",
         "group_name": _get_contact_name(contact),
-        "db_dir": str(db_path.resolve()),
-        "output_dir": str(out_path.resolve()),
+        "csv_path": getattr(exporter, "csv_path", None),
     }
 
 
@@ -188,13 +187,13 @@ def _get_contact_name(contact: Any) -> str:
 
 
 def _fail(message: str) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "message": message,
-        "group_name": None,
-        "db_dir": None,
-        "output_dir": None,
-    }
+    def _fail(message: str) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "message": message,
+            "group_name": None,
+            "csv_path": None,
+        }
 
 
 if __name__ == "__main__":
@@ -203,9 +202,9 @@ if __name__ == "__main__":
     freeze_support()
 
     result = run_msg(
-        group_name="洗片子",
+        group_name="淼群",
         start_time="2026-01-01 00:00:00",
-        end_time="2026-06-11 00:00:00",
+        end_time="2026-06-2 00:00:00",
         options={},
         output_format="csv",
 

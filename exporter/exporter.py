@@ -11,7 +11,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple
 
-import pysilk
+# import pysilk
 
 from wxManager import MessageType, DataBaseInterface
 from wxManager.model import Contact, Me, Message
@@ -94,7 +94,7 @@ class ExporterBase(ExporterBaseBase):
             database: DataBaseInterface,
             contact: Contact,
             output_dir,
-            type_=FileType.TXT,  # 导出文件类型
+            type_=FileType.CSV,  # 导出文件类型
             message_types: set[MessageType] = None,  # 导出的消息类型
             time_range=None,  # 导出的日期范围
             group_members: set[str] = None,  # 群聊中只导出这些人的聊天记录

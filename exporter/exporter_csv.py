@@ -1,9 +1,11 @@
 import csv
 import os
+from pathlib import Path
 
 from wxManager import Message
 from wxManager.model import Me
-from exporter.exporter import ExporterBase, get_new_filename
+from exporter.exporter import ExporterBase
+# from exporter.exporter import get_new_filename
 
 
 class CSVExporter(ExporterBase):
@@ -62,7 +64,8 @@ class CSVExporter(ExporterBase):
         os.makedirs(self.origin_path, exist_ok=True)
 
         filename = os.path.join(self.origin_path,f"{self.contact.remark}.csv")
-        filename = get_new_filename(filename)
+        # filename = get_new_filename(filename)
+        self.csv_path = str(Path(filename).resolve())
 
         columns = ['消息ID', '类型', 'wxid', '时间', '内容', '备注', '群昵称', '昵称']
 
@@ -78,19 +81,31 @@ class CSVExporter(ExporterBase):
         messages = self.database.get_messages(self.contact.wxid, time_range=self.time_range)
 
         total_steps = len(messages)
+
         # 写入CSV文件
-        with open(filename, mode='w', newline='', encoding='utf-8-sig') as file:
-            writer = csv.writer(file)
-            writer.writerow(columns)
-            # 写入数据
-            csv_res = []
-            for index, message in enumerate(messages):
-                if index and index % 1000 == 0:
-                    self.update_progress_callback(index / total_steps)
-                if not self.is_selected(message):
-                    continue
-                csv_res.append(self.message_to_list(message))
-            writer.writerows(csv_res)
+        try:
+            with open(filename, mode='w', newline='', encoding='utf-8-sig') as file:
+                writer = csv.writer(file)
+                writer.writerow(columns)
+
+                csv_res = []
+                for index, message in enumerate(messages):
+                    if index and index % 1000 == 0:
+                        self.update_progress_callback(index / total_steps)
+
+                    if not self.is_selected(message):
+                        continue
+
+                    csv_res.append(self.message_to_list(message))
+
+                writer.writerows(csv_res)
+
+        except PermissionError:
+            raise PermissionError(
+                f"无法覆盖 CSV 文件：{filename}。"
+                f"请先关闭 Excel/WPS 中打开的该文件，然后重新导出。"
+            )
+
         self.update_progress_callback(1)
         self.finish_callback(self.exporter_id)
         print(f"完成导出 CSV :{self.contact.remark}")
