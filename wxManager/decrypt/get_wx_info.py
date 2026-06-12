@@ -29,7 +29,7 @@ def get_exe_bit(file_path):
         with open(file_path, 'rb') as f:
             dos_header = f.read(2)
             if dos_header != b'MZ':
-                print('get exe bit error: Invalid PE file')
+                print('[ERROR] Get exe bit error: Invalid PE file')
                 return 64
             # Seek to the offset of the PE signature
             f.seek(60)
@@ -46,10 +46,10 @@ def get_exe_bit(file_path):
             elif machine == 0x8664:
                 return 64
             else:
-                print('get exe bit error: Unknown architecture: %s' % hex(machine))
+                print('[ERROR] Get exe bit error: Unknown architecture: %s' % hex(machine))
                 return 64
     except IOError:
-        print('get exe bit error: File not found or cannot be opened')
+        print('[ERROR] Get exe bit error: File not found or cannot be opened')
         return 64
 
 

@@ -243,7 +243,7 @@ def is_ok(passphrase, buf):
     hash_mac_start_offset = end - reserve + IV_SIZE
     hash_mac_end_offset = hash_mac_start_offset + len(hash_mac)
     if hash_mac == buf[hash_mac_start_offset:hash_mac_end_offset]:
-        print(f"[v] found key at 0x{start:x}")
+        # print(f"[v] found key at 0x{start:x}")
         finish_flag = True
         return True
     return False
@@ -264,7 +264,7 @@ def verify_key(key: bytes, buffer: bytes, flag, result):
     if flag.value:  # 如果其他进程已找到结果，提前退出
         return False
     if is_ok(key, buffer):  # 替换为实际的目标检测条件
-        print("Key found!", key)
+        print("Key found: ", key)
         with flag.get_lock():  # 保证线程安全
             flag.value = True
             return key
@@ -280,7 +280,7 @@ def get_key_(keys, buf):
 
     for r in results:
         if r:
-            print("Key found!", r)
+            print("Key found: ", r)
             return bytes.hex(r)
     return None
 
@@ -394,7 +394,7 @@ def get_wx_dir(process_handle):
 def get_nickname(pid):
     process_handle = open_process(pid)
     if not process_handle:
-        print(f"无法打开进程 {pid}")
+        print(f"[ERROR] Failed to open {pid}")
         return {}
     process_infos = get_memory_regions(process_handle)
     # 加载规则
@@ -467,7 +467,7 @@ def dump_wechat_info_v4(pid) -> WeChatInfo | None:
     wechat_info.version = get_version(pid)
     process_handle = open_process(pid)
     if not process_handle:
-        print(f"无法打开进程 {pid}")
+        print(f"[ERROR] Failed to open {pid}")
         return wechat_info
     queue = multiprocessing.Queue()
     process = multiprocessing.Process(target=worker, args=(pid, queue))

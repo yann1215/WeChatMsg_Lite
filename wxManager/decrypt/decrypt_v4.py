@@ -20,7 +20,7 @@ SQLITE_HEADER = b"SQLite format 3"
 
 def decrypt_db_file_v4(pkey, in_db_path, out_db_path):
     if not os.path.exists(in_db_path):
-        print(f"【!!!】{in_db_path} does not exist.")
+        print(f"[ERROR] {in_db_path} does not exist.")
         return False
 
     with open(in_db_path, 'rb') as f_in, open(out_db_path, 'wb') as f_out:
@@ -99,7 +99,7 @@ def decrypt_db_file_v4(pkey, in_db_path, out_db_path):
 
             cur_page += 1
 
-    print("Decryption completed.")
+    # print("Decryption completed.")
     return True
 
 
@@ -110,7 +110,7 @@ def decode_wrapper(tasks):
 
 def decrypt_db_files(key, src_dir: str, dest_dir: str):
     if not os.path.exists(src_dir):
-        print(f"源文件夹 {src_dir} 不存在")
+        print(f"Source file {src_dir} does not exist.")
         return
 
     if not os.path.exists(dest_dir):
@@ -130,7 +130,7 @@ def decrypt_db_files(key, src_dir: str, dest_dir: str):
                 # 确保目标子文件夹存在
                 if not os.path.exists(dest_sub_dir):
                     os.makedirs(dest_sub_dir)
-                print(dest_file_path)
+                # print(dest_file_path)
                 decrypt_tasks.append((key, src_file_path, dest_file_path))
                 # decrypt_db_file_v4(key, src_file_path, dest_file_path)
     with ProcessPoolExecutor(max_workers=16) as executor:

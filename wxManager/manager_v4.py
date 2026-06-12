@@ -99,9 +99,25 @@ class DataBaseV4(DataBaseInterface):
         self.media_db.init_database(db_dir)
         flag &= self.hardlink_db.init_database(db_dir)
         flag &= self.emotion_db.init_database(db_dir)
-        flag &= self.audio2text_db.init_database(db_dir)
-        if flag:
-            self.audio2text_db.create()  # 初始化语音转文字数据库
+
+        # Audio2Text.db 是语音转文字缓存数据库。
+        # 有些微信版本/解密结果中该文件可能不是有效 SQLite。
+        # 对普通聊天记录导出不是必需项，因此这里允许失败并跳过。
+        try:
+            audio2text_ok = self.audio2text_db.init_database(db_dir)
+
+            if audio2text_ok:
+                try:
+                    self.audio2text_db.create()
+                except Exception as e:
+                    print(f"[WARN] Audio2Text.db create failed, skipped: {e}")
+            else:
+                print("[WARN] Audio2Text.db init failed, skipped.")
+
+        except Exception as e:
+            print(f"[WARN] Audio2Text.db is unavailable, skipped: {e}")
+            self.audio2text_db = None
+
         return flag
 
     def close(self):
@@ -125,7 +141,7 @@ class DataBaseV4(DataBaseInterface):
         # todo 改成yield进行操作，多进程处理加快速度
         import time
         st = time.time()
-        logger.error(f'开始获取聊天记录：{st}')
+        logger.info(f'开始获取聊天记录：{st}')
         res = []
 
         # messages = self.message_db.get_messages_by_username(username_, time_range)*20
@@ -168,8 +184,8 @@ class DataBaseV4(DataBaseInterface):
                     res.extend(future.result())
 
         et = time.time()
-        logger.error(f'获取聊天记录完成：{et}')
-        logger.error(f'获取聊天记录耗时：{et - st:.2f}s/{len(res)}条消息 {username_}')
+        logger.info(f'获取聊天记录完成：{et}')
+        logger.info(f'获取聊天记录耗时：{et - st:.2f}s/{len(res)}条消息 {username_}')
         res.sort()
         return res
 
@@ -278,14 +294,24 @@ class DataBaseV4(DataBaseInterface):
         return self.media_db.get_audio_path(reserved0, output_path, filename)
 
     def get_audio_text(self, server_id):
-        return self.audio2text_db.get_audio_text(server_id)
+        if self.audio2text_db is None:
+            return ''
+        try:
+            return self.audio2text_db.get_audio_text(server_id)
+        except Exception:
+            return ''
 
     def update_audio_to_text(self):
         # todo
         return
 
     def add_audio_txt(self, server_id, text):
-        return self.audio2text_db.add_text(server_id, text)
+        if self.audio2text_db is None:
+            return False
+        try:
+            return self.audio2text_db.add_text(server_id, text)
+        except Exception:
+            return False
 
     # 语音结束
 

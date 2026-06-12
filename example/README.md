@@ -3,7 +3,7 @@
 ## 1、解析数据
 
 ```shell
-python 1-decrypt.py
+python decrypt_runner.py
 ```
 
 运行成功之后会生成一个数据库文件夹

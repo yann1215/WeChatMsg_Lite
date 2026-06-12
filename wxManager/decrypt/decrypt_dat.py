@@ -149,7 +149,7 @@ def get_decode_code_v4(wx_dir):
                         # 推导出密钥
                         xor_key = [c ^ p for c, p in zip(file_tail, jpg_known_tail)]
                         if len(set(xor_key)) == 1:
-                            print(f'[*] 找到异或密钥: 0x{xor_key[0]:x}')
+                            # print(f'[*] 找到异或密钥: 0x{xor_key[0]:x}')
                             return xor_key[0]
         return -1
 
