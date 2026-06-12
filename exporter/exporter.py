@@ -20,9 +20,16 @@ from wxManager.log import logger
 from exporter.config import FileType
 
 
-def makedirs(path):
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
+def makedirs(path, create_resource_dirs=True):
+    """
+    CSV 导出：只创建聊天记录根目录，不创建 image / emoji / file 等资源目录
+    HTML / DOCX / TXT 等其它导出：仍然创建资源目录
+    """
+    os.makedirs(path, exist_ok=True)
+
+    if not create_resource_dirs:
+        return
+
     os.makedirs(os.path.join(path, 'image'), exist_ok=True)
     os.makedirs(os.path.join(path, 'emoji'), exist_ok=True)
     os.makedirs(os.path.join(path, 'video'), exist_ok=True)
@@ -129,7 +136,11 @@ class ExporterBase(ExporterBaseBase):
         self.group_members = group_members  # 要导出的群聊成员（用于群消息筛选）
         self.group_members_set = group_members
         self.origin_path = os.path.join(output_dir, '聊天记录', f'{self.contact.remark}({self.contact.wxid})')
-        makedirs(self.origin_path)
+
+        makedirs(
+            self.origin_path,
+            create_resource_dirs=(self.output_type != FileType.CSV)
+        )
 
     def print_progress(self, progress):
         logger.info(f'导出进度：{progress * 100:.2f}%')

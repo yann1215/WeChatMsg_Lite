@@ -322,16 +322,24 @@ class DataBaseV4(DataBaseInterface):
 
     def create_contact(self, contact_info_list) -> Person:
         wxid, local_type, flag = contact_info_list[0], contact_info_list[2], contact_info_list[3]
-        nickname = contact_info_list[5]
-        remark = contact_info_list[4]
+
+        nickname = contact_info_list[5] or ""
+        contact_remark = contact_info_list[4] or ""  # 原始备注，可能为空
+        remark = contact_remark
+
         if not nickname and wxid.endswith('@chatroom'):
             nickname = self._get_chatroom_name(contact_info_list[0])
+
+        # 保留原项目逻辑：remark 仍然作为显示名/文件名使用
+        # 但 contact_remark 记录真正的“备注”
         if not remark:
             remark = nickname
+
         gender = '未知'
         signature = ''
         label_list = []
         region = ('', '', '')
+
         if not (wxid.endswith('@openim') or wxid.endswith('@chatroom')):
             try:
                 # 创建顶级消息对象
@@ -352,6 +360,7 @@ class DataBaseV4(DataBaseInterface):
             except:
                 pass
                 # logger.error(f'{wxid} {contact_info_list[5]}联系人解析失败\n{contact_info_list[10]}')
+
         contact = Contact(
             wxid=contact_info_list[0],
             remark=remark,
@@ -365,6 +374,9 @@ class DataBaseV4(DataBaseInterface):
             label_list=label_list,
             region=region
         )
+
+        contact.contact_remark = contact_remark
+        contact.group_nickname = ""
 
         def is_nth_bit_set(number, n):
             # 左移 1 到第 n 位
@@ -440,14 +452,23 @@ class DataBaseV4(DataBaseInterface):
         # 解析RoomData数据
         parsechatroom = ChatRoomData()
         parsechatroom.ParseFromString(chatroom[1])
+
         # 群成员数据放入字典存储
         for mem in parsechatroom.members:
             contact = self.get_contact_by_username(mem.wxID)
             if contact:
+                # 单独保存“群昵称”
+                contact.group_nickname = mem.displayName or ""
+
+                # 保留旧逻辑：contact.remark 仍然作为群聊内显示名
+                # 这样不影响 HTML/TXT 等其它导出显示
                 if mem.displayName:
                     contact.remark = mem.displayName
+
                 result[contact.wxid] = contact
+
         self.chatroom_members_map[chatroom_name] = result
+
         return result
 
     def _get_chatroom_name(self, wxid):

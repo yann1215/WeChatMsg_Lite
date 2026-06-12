@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from wxManager import DatabaseConnection
-from wxManager.decrypt_runner import decrypt_wechat_database_uncached
+from wxManager.decrypt_runner import decrypt_wechat_database
 from exporter.exporter_csv import CSVExporter
 from exporter.config import FileType
 
@@ -44,7 +44,7 @@ def run_msg(
         if not auto_decrypt:
             return _fail("db_dir 为空，且 auto_decrypt=False，无法继续运行")
 
-        decrypt_result = decrypt_wechat_database_uncached(
+        decrypt_result = decrypt_wechat_database(
             db_version=db_version,
             source_dir=source_dir,
             output_root=decrypt_output_root,
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     freeze_support()
 
     result = run_msg(
-        group_name="47734211220@chatroom",
+        group_name="洗片子",
         start_time="2026-01-01 00:00:00",
         end_time="2026-06-11 00:00:00",
         options={},
