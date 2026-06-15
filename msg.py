@@ -13,16 +13,27 @@ from exporter.config import FileType
 
 def run_msg(
     group_name: str,
+
     start_time: str,
     end_time: str,
+
     options: dict[str, Any] | None = None,
+
     output_format: str = "csv",
+
     db_dir: str | None = None,
     output_dir: str = "./output",
+
     db_version: int = 4,
+
     auto_decrypt: bool = True,
     source_dir: str | None = None,
     decrypt_output_root: str = ".",
+
+    use_cache_db: bool = True,
+    use_cache_key: bool = True,
+    force_decrypt: bool = False,
+    force_find_key: bool = False,
 ) -> dict[str, Any]:
     """
     自动解析/解密微信数据库，并导出指定群聊的聊天记录。
@@ -48,6 +59,10 @@ def run_msg(
             db_version=db_version,
             source_dir=source_dir,
             output_root=decrypt_output_root,
+            use_cache_db=use_cache_db,
+            use_cache_key=use_cache_key,
+            force_decrypt=force_decrypt,
+            force_find_key=force_find_key,
         )
 
         print("[DEBUG] decrypt_result =", decrypt_result)
@@ -202,21 +217,27 @@ if __name__ == "__main__":
     freeze_support()
 
     result = run_msg(
-        group_name="淼群",
-        start_time="2026-01-01 00:00:00",
-        end_time="2026-06-2 00:00:00",
+        group_name="AAA吃铁互助",
+
+        start_time="2026-06-10 00:00:00",
+        end_time="2026-06-15 00:00:00",
+
         options={},
+
         output_format="csv",
 
         db_dir=None,  # 不手动传解密后目录
-        auto_decrypt=True,
-
-        source_dir=None,  # 不手动传微信原始目录，自动检测
-        decrypt_output_root=r"D:\2_PycharmTestData\temp",
-
         output_dir=r"D:\2_PycharmTestData\output",
         db_version=4,
 
+        auto_decrypt = True,
+        source_dir = None,
+        decrypt_output_root = r"D:\2_PycharmTestData\temp",
+
+        use_cache_db = False,
+        use_cache_key = True,
+        force_decrypt = True,
+        force_find_key = False,
     )
 
     print(result)

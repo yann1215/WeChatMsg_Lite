@@ -6,7 +6,7 @@ from wxManager import Message
 from wxManager.model import Me
 from exporter.exporter import ExporterBase
 # from exporter.exporter import get_new_filename
-
+import traceback
 
 class CSVExporter(ExporterBase):
     def message_to_list(self, message: Message):
@@ -67,20 +67,56 @@ class CSVExporter(ExporterBase):
         # filename = get_new_filename(filename)
         self.csv_path = str(Path(filename).resolve())
 
+        # print("[CSV DEBUG] origin_path =", self.origin_path)
+        # print("[CSV DEBUG] filename =", filename)
+        # print("[CSV DEBUG] contact.wxid =", self.contact.wxid)
+        # print("[CSV DEBUG] time_range =", self.time_range)
+
         columns = ['消息ID', '类型', 'wxid', '时间', '内容', '备注', '群昵称', '昵称']
 
-        if self.contact.is_chatroom():
-            self.group_contacts = self.database.get_chatroom_members(self.contact.wxid)
-            self.group_contacts[Me().wxid] = Me()
-        else:
-            self.group_contacts = {
-                Me().wxid: Me(),
-                self.contact.wxid: self.contact
-            }
+        # print("[CSV DEBUG] before get_chatroom_members")
+        # print("[CSV DEBUG] contact.wxid =", self.contact.wxid)
+        # print("[CSV DEBUG] contact.remark =", self.contact.remark)
+        # print("[CSV DEBUG] is_chatroom =", self.contact.is_chatroom())
+        # print("[CSV DEBUG] time_range =", self.time_range)
 
-        messages = self.database.get_messages(self.contact.wxid, time_range=self.time_range)
+        try:
+            if self.contact.is_chatroom():
+                self.group_contacts = self.database.get_chatroom_members(self.contact.wxid)
+                # print("[CSV DEBUG] after get_chatroom_members")
+                # print("[CSV DEBUG] group_contacts count =", len(self.group_contacts))
 
-        total_steps = len(messages)
+                self.group_contacts[Me().wxid] = Me()
+            else:
+                self.group_contacts = {
+                    Me().wxid: Me(),
+                    self.contact.wxid: self.contact
+                }
+                print("[CSV DEBUG] non-chatroom group_contacts ready")
+
+        except Exception as e:
+            print("[CSV ERROR] get_chatroom_members failed:", repr(e))
+            traceback.print_exc()
+            raise
+
+        # print("[CSV DEBUG] before get_messages")
+
+        try:
+            messages = self.database.get_messages(
+                self.contact.wxid,
+                time_range=self.time_range
+            )
+
+            # print("[CSV DEBUG] after get_messages")
+            # print("[CSV DEBUG] messages type =", type(messages))
+            # print("[CSV DEBUG] messages count =", len(messages))
+
+            total_steps = len(messages)
+
+        except Exception as e:
+            print("[CSV ERROR] get_messages failed:", repr(e))
+            traceback.print_exc()
+            raise
 
         # 写入CSV文件
         try:

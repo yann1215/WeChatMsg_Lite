@@ -20,6 +20,7 @@ from wxManager.log import logger
 from wxManager.model.message import Message
 from wxManager.parser.util.protocbuf import file_info_pb2
 from google.protobuf.json_format import MessageToJson, MessageToDict
+import sqlite3
 
 image_root_path = "msg\\attach\\"
 video_root_path = "msg\\video\\"
@@ -81,50 +82,108 @@ class HardLinkDB(DataBaseBase):
         except:
             pass
 
+    def _table_exists(self, table_name: str) -> bool:
+        try:
+            cursor = self.DB.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                [table_name]
+            )
+            result = cursor.fetchone()
+            cursor.close()
+            return result is not None
+        except Exception:
+            return False
+
     def get_image_by_md5(self, md5: str):
+        table_name = "image_hardlink_info_v3"
+
+        if not self._table_exists(table_name):
+            # print(f"[HARDLINK WARNING] 缺少表 {table_name}，跳过图片 hardlink 查询")
+            return None
+
         sql = '''
-        select file_size,type,file_name,dir2id.username,dir2id2.username,_rowid_,modify_time,extra_buffer
-        from image_hardlink_info_v3
-        join dir2id on dir2id.rowid = dir1
-        join dir2id as dir2id2 on dir2id2.rowid=dir2
-        where md5=?
+            select file_size,type,file_name,dir2id.username,dir2id2.username,_rowid_,modify_time,extra_buffer
+            from image_hardlink_info_v3
+            join dir2id on dir2id.rowid = dir1
+            join dir2id as dir2id2 on dir2id2.rowid=dir2
+            where md5=?
         '''
-        cursor = self.DB.cursor()
-        cursor.execute(sql, [md5])
-        result = cursor.fetchall()
-        if result:
-            return result[0]
-        return None
+
+        try:
+            cursor = self.DB.cursor()
+            cursor.execute(sql, [md5])
+            result = cursor.fetchall()
+            cursor.close()
+
+            if result:
+                return result[0]
+
+            return None
+
+        except sqlite3.OperationalError as e:
+            # print(f"[HARDLINK WARNING] 查询图片 hardlink 失败，跳过：{e}")
+            return None
 
     def get_video_by_md5(self, md5: str):
+        table_name = "video_hardlink_info_v3"
+
+        if not self._table_exists(table_name):
+            # print(f"[HARDLINK WARNING] 缺少表 {table_name}，跳过视频 hardlink 查询")
+            return None
+
         sql = '''
-        SELECT file_size, type, file_name, dir2id.username, dir2id2.username, _rowid_, modify_time, extra_buffer
-        FROM video_hardlink_info_v3
-        JOIN dir2id ON dir2id.rowid = dir1
-        LEFT JOIN dir2id AS dir2id2 ON dir2id2.rowid = dir2 AND dir2 != 0
-        WHERE md5 = ?
+            SELECT file_size, type, file_name, dir2id.username, dir2id2.username, _rowid_, modify_time, extra_buffer
+            FROM video_hardlink_info_v3
+            JOIN dir2id ON dir2id.rowid = dir1
+            LEFT JOIN dir2id AS dir2id2 ON dir2id2.rowid = dir2 AND dir2 != 0
+            WHERE md5 = ?
         '''
-        cursor = self.DB.cursor()
-        cursor.execute(sql, [md5])
-        result = cursor.fetchall()
-        if result:
-            return result[0]
-        return None
+
+        try:
+            cursor = self.DB.cursor()
+            cursor.execute(sql, [md5])
+            result = cursor.fetchall()
+            cursor.close()
+
+            if result:
+                return result[0]
+
+            return None
+
+        except sqlite3.OperationalError as e:
+            # print(f"[HARDLINK WARNING] 查询视频 hardlink 失败，跳过：{e}")
+            return None
 
     def get_file_by_md5(self, md5: str):
+        table_name = "file_hardlink_info_v3"
+
+        if not self._table_exists(table_name):
+            # print(f"[HARDLINK WARNING] 缺少表 {table_name}，跳过文件 hardlink 查询")
+            return None
+
         sql = '''
-        select file_size,type,file_name,dir2id.username,dir2id2.username,_rowid_,modify_time,extra_buffer
-        from file_hardlink_info_v3
-        join dir2id on dir2id.rowid = dir1
-        LEFT JOIN dir2id AS dir2id2 ON dir2id2.rowid = dir2 AND dir2 != 0
-        where md5=?
+            select file_size,type,file_name,dir2id.username,dir2id2.username,_rowid_,modify_time,extra_buffer
+            from file_hardlink_info_v3
+            join dir2id on dir2id.rowid = dir1
+            LEFT JOIN dir2id AS dir2id2 ON dir2id2.rowid = dir2 AND dir2 != 0
+            where md5=?
         '''
-        cursor = self.DB.cursor()
-        cursor.execute(sql, [md5])
-        result = cursor.fetchall()
-        if result:
-            return result[0]
-        return None
+
+        try:
+            cursor = self.DB.cursor()
+            cursor.execute(sql, [md5])
+            result = cursor.fetchall()
+            cursor.close()
+
+            if result:
+                return result[0]
+
+            return None
+
+        except sqlite3.OperationalError as e:
+            # print(f"[HARDLINK WARNING] 查询文件 hardlink 失败，跳过：{e}")
+            return None
 
     def get_video(self, md5, thumb=False):
         video_info = self.get_video_by_md5(md5)

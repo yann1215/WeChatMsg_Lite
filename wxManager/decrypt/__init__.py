@@ -12,7 +12,6 @@ from typing import List
 
 import psutil
 
-from wxManager.decrypt.wx_info_v3 import dump_wechat_info_v3
 from wxManager.decrypt.wx_info_v4 import dump_wechat_info_v4
 from wxManager.decrypt.common import WeChatInfo
 
@@ -36,18 +35,6 @@ def get_info_v4() -> List[WeChatInfo]:
     return result_v4
 
 
-def get_info_v3(version_list) -> List[WeChatInfo]:
-    result = []
-    for process in psutil.process_iter(['name', 'exe', 'pid']):
-        if process.name() == 'WeChat.exe':
-            pid = process.pid
-            wxinfo = dump_wechat_info_v3(version_list, pid)
-            result.append(
-                wxinfo
-            )
-    return result
-
-
 if __name__ == "__main__":
     import json
 
@@ -56,6 +43,6 @@ if __name__ == "__main__":
         version_list = json.loads(f.read())
 
     r_4 = get_info_v4()
-    r_3 = get_info_v3(version_list)
-    for wx_info in r_4+r_3:
+
+    for wx_info in r_4:
         print(wx_info)

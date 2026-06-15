@@ -110,12 +110,14 @@ class DataBaseV4(DataBaseInterface):
                 try:
                     self.audio2text_db.create()
                 except Exception as e:
-                    print(f"[WARN] Audio2Text.db create failed, skipped: {e}")
+                    pass
+                    # print(f"[WARN] Audio2Text.db create failed, skipped: {e}")
             else:
-                print("[WARN] Audio2Text.db init failed, skipped.")
+                pass
+                # print("[WARN] Audio2Text.db init failed, skipped.")
 
         except Exception as e:
-            print(f"[WARN] Audio2Text.db is unavailable, skipped: {e}")
+            # print(f"[WARN] Audio2Text.db is unavailable, skipped: {e}")
             self.audio2text_db = None
 
         return flag

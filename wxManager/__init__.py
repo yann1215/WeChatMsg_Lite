@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 """
 @File    : __init__.py.py
-@Author  : Shuaikang Zhou
-@Time    : 2023/1/5 0:10
+@Author  : Yann
+@Time    : 2026/6/15 10:10
 @IDE     : Pycharm
-@Version : Python3.10
+@Version : Python3.12
 @comment : ···
 """
 from .log import logger
 from .model import Me, MessageType, Message, Person, Contact, TextMessage, ImageMessage
 from .db_main import DataBaseInterface
 from .manager_v4 import DataBaseV4
-from .manager_v3 import DataBaseV3
 
-__version__ = '3.0.0'
-
+__version__ = '4.0.0'
 
 class DatabaseConnection:
     def __init__(self, db_dir, db_version=4):
@@ -26,7 +24,9 @@ class DatabaseConnection:
         if self.db_version == 4:
             database0 = DataBaseV4()
         else:
-            database0 = DataBaseV3()
+            logger.error("微信大版本不适配，请切换到 4.x 版本微信使用")
+            return None
+
         if database0.init_database(self.db_dir):
             return database0
         else:
