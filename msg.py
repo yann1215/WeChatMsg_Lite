@@ -11,7 +11,7 @@ from exporter.exporter_csv import CSVExporter
 from exporter.config import FileType
 
 
-def run_msg(
+def get_msg(
     group_name: str,
 
     start_time: str,
@@ -30,10 +30,10 @@ def run_msg(
     source_dir: str | None = None,
     decrypt_output_root: str = ".",
 
-    use_cache_db: bool = True,
-    use_cache_key: bool = True,
-    force_decrypt: bool = False,
-    force_find_key: bool = False,
+    use_cache_db: bool = False,     # 不复用旧的解密后数据库目录
+    use_cache_key: bool = True,     # 强制重新解密微信数据库
+    force_decrypt: bool = True,     # 可以复用之前找到的 key，减少找 key 的步骤
+    force_find_key: bool = False,   # 不强制重新找 key
 ) -> dict[str, Any]:
     """
     自动解析/解密微信数据库，并导出指定群聊的聊天记录。
@@ -216,11 +216,11 @@ if __name__ == "__main__":
 
     freeze_support()
 
-    result = run_msg(
-        group_name="AAA吃铁互助",
+    result = get_msg(
+        group_name="淼群",
 
-        start_time="2026-06-10 00:00:00",
-        end_time="2026-06-15 00:00:00",
+        start_time="2026-06-1 00:00:00",
+        end_time="2026-06-10 00:00:00",
 
         options={},
 
