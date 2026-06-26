@@ -58,6 +58,7 @@ sqlcipher-3.0.1/
 # WeChat decrypted databases / private data
 # =========================
 data/
+temp/
 output/
 outputs/
 export/

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from wxManager import DatabaseConnection
 from wxManager.decrypt_runner import decrypt_wechat_database
@@ -11,18 +11,17 @@ from wxManager.decrypt_runner import decrypt_wechat_database
 
 def get_member(
     group_name: str,
-
     db_dir: str | None = None,
     db_version: int = 4,
-
     auto_decrypt: bool = True,
     source_dir: str | None = None,
     decrypt_output_root: str = ".",
-
     use_cache_db: bool = True,
     use_cache_key: bool = True,
     force_decrypt: bool = False,
     force_find_key: bool = False,
+    allow_manual_key_input: bool = True,
+    key_input_func: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
 
     """
@@ -61,10 +60,15 @@ def get_member(
             use_cache_key=use_cache_key,
             force_decrypt=force_decrypt,
             force_find_key=force_find_key,
+            allow_manual_key_input=allow_manual_key_input,
+            key_input_func=key_input_func,
         )
 
         if not decrypt_result.get("ok"):
-            return _fail(f"自动解密失败：{decrypt_result.get('message')}", group_name)
+            return _fail(
+                f"数据库解密失败：{decrypt_result.get('message')}",
+                group_name,
+            )
 
         db_dir = decrypt_result.get("db_dir")
 
@@ -242,7 +246,7 @@ if __name__ == "__main__":
 
         auto_decrypt=True,
         source_dir=None,
-        decrypt_output_root=r"D:\2_PycharmTestData\temp",
+        decrypt_output_root=r".\temp",
 
         use_cache_db=False,
         use_cache_key=True,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from wxManager import DatabaseConnection
 from wxManager.decrypt_runner import decrypt_wechat_database
@@ -34,6 +34,9 @@ def get_msg(
     use_cache_key: bool = True,     # 强制重新解密微信数据库
     force_decrypt: bool = True,     # 可以复用之前找到的 key，减少找 key 的步骤
     force_find_key: bool = False,   # 不强制重新找 key
+
+    allow_manual_key_input: bool = True,
+    key_input_func: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     """
     自动解析/解密微信数据库，并导出指定群聊的聊天记录。
@@ -63,14 +66,24 @@ def get_msg(
             use_cache_key=use_cache_key,
             force_decrypt=force_decrypt,
             force_find_key=force_find_key,
+            allow_manual_key_input=allow_manual_key_input,
+            key_input_func=key_input_func,
         )
 
         print("[DEBUG] decrypt_result =", decrypt_result)
 
         if not decrypt_result.get("ok"):
-            return _fail(f"自动解密失败：{decrypt_result.get('message')}")
+            return _fail(
+                "数据库解密失败："
+                f"{decrypt_result.get('message') or '未知错误'}"
+            )
 
         db_dir = decrypt_result.get("db_dir")
+        if not db_dir:
+            return _fail(
+                "数据库解密成功，但没有返回 db_dir"
+            )
+
         print("[DEBUG] db_dir used by DatabaseConnection =", db_dir)
 
     # 2. 检查解密后的 db_dir
@@ -202,13 +215,12 @@ def _get_contact_name(contact: Any) -> str:
 
 
 def _fail(message: str) -> dict[str, Any]:
-    def _fail(message: str) -> dict[str, Any]:
-        return {
-            "ok": False,
-            "message": message,
-            "group_name": None,
-            "csv_path": None,
-        }
+    return {
+        "ok": False,
+        "message": message,
+        "group_name": None,
+        "csv_path": None,
+    }
 
 
 if __name__ == "__main__":
@@ -227,12 +239,12 @@ if __name__ == "__main__":
         output_format="csv",
 
         db_dir=None,  # 不手动传解密后目录
-        output_dir=r"D:\2_PycharmTestData\output",
+        output_dir=r".\output",
         db_version=4,
 
         auto_decrypt = True,
         source_dir = None,
-        decrypt_output_root = r"D:\2_PycharmTestData\temp",
+        decrypt_output_root = r".\temp",
 
         use_cache_db = False,
         use_cache_key = True,

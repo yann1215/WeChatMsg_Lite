@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 import hmac
 import os
 import struct
 from concurrent.futures import ProcessPoolExecutor
+from typing import Any
 
 from Crypto.Cipher import AES
-from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA512
+from Crypto.Protocol.KDF import PBKDF2
 
-# Constants
+
 IV_SIZE = 16
-HMAC_SHA256_SIZE = 64
+HMAC_SIZE = 64
 KEY_SIZE = 32
 AES_BLOCK_SIZE = 16
 ROUND_COUNT = 256000
@@ -18,120 +21,339 @@ SALT_SIZE = 16
 SQLITE_HEADER = b"SQLite format 3"
 
 
-def decrypt_db_file_v4(pkey, in_db_path, out_db_path):
-    if not os.path.exists(in_db_path):
-        print(f"[ERROR] {in_db_path} does not exist.")
+def _normalize_hex_key(pkey: str) -> str | None:
+    """Normalize a 32-byte hexadecimal key."""
+    if not isinstance(pkey, str):
+        return None
+
+    normalized = pkey.strip().lower()
+    if normalized.startswith("0x"):
+        normalized = normalized[2:]
+
+    if len(normalized) != KEY_SIZE * 2:
+        return None
+
+    try:
+        raw_key = bytes.fromhex(normalized)
+    except ValueError:
+        return None
+
+    if len(raw_key) != KEY_SIZE:
+        return None
+
+    return normalized
+
+
+def _derive_keys(pkey: str, salt: bytes) -> tuple[bytes, bytes]:
+    """Derive the page encryption key and HMAC key."""
+    passphrase = bytes.fromhex(pkey)
+    mac_salt = bytes(value ^ 0x3A for value in salt)
+
+    key = PBKDF2(
+        passphrase,
+        salt,
+        dkLen=KEY_SIZE,
+        count=ROUND_COUNT,
+        hmac_hash_module=SHA512,
+    )
+    mac_key = PBKDF2(
+        key,
+        mac_salt,
+        dkLen=KEY_SIZE,
+        count=2,
+        hmac_hash_module=SHA512,
+    )
+    return key, mac_key
+
+
+def _reserve_size() -> int:
+    reserve = IV_SIZE + HMAC_SIZE
+    return (
+        (reserve + AES_BLOCK_SIZE - 1)
+        // AES_BLOCK_SIZE
+        * AES_BLOCK_SIZE
+    )
+
+
+def _page_hmac_matches(
+    page: bytes,
+    mac_key: bytes,
+    page_number: int,
+    offset: int,
+) -> bool:
+    """Verify one encrypted database page."""
+    reserve = _reserve_size()
+    end = len(page)
+
+    if end < offset + reserve:
         return False
 
-    with open(in_db_path, 'rb') as f_in, open(out_db_path, 'wb') as f_out:
-        # Read salt from the first SALT_SIZE bytes
-        salt = f_in.read(SALT_SIZE)
-        if not salt:
-            print("File is empty or corrupted.")
+    stored_mac_offset = end - reserve + IV_SIZE
+    calculated_mac = hmac.new(
+        mac_key,
+        page[offset:stored_mac_offset],
+        SHA512,
+    )
+    calculated_mac.update(struct.pack("<I", page_number))
+
+    stored_mac = page[
+        stored_mac_offset:stored_mac_offset + HMAC_SIZE
+    ]
+    return hmac.compare_digest(
+        calculated_mac.digest(),
+        stored_mac,
+    )
+
+
+def validate_key_v4(pkey: str, in_db_path: str) -> bool:
+    """Validate a key against the first page without creating output."""
+    normalized_key = _normalize_hex_key(pkey)
+    if normalized_key is None or not os.path.isfile(in_db_path):
+        return False
+
+    try:
+        with open(in_db_path, "rb") as f_in:
+            salt = f_in.read(SALT_SIZE)
+            encrypted_part = f_in.read(PAGE_SIZE - SALT_SIZE)
+
+        if len(salt) != SALT_SIZE:
+            return False
+        if len(encrypted_part) != PAGE_SIZE - SALT_SIZE:
             return False
 
-        mac_salt = bytes(x ^ 0x3a for x in salt)
+        page = salt + encrypted_part
+        _key, mac_key = _derive_keys(normalized_key, salt)
 
-        # Convert pkey from hex to bytes
-        passphrase = bytes.fromhex(pkey)
-
-        # Use PBKDF2 to derive key and mac_key
-        key = PBKDF2(passphrase, salt, dkLen=KEY_SIZE, count=ROUND_COUNT, hmac_hash_module=SHA512)
-        mac_key = PBKDF2(key, mac_salt, dkLen=KEY_SIZE, count=2, hmac_hash_module=SHA512)
-
-        # Write SQLITE_HEADER to the output file
-        f_out.write(SQLITE_HEADER)
-        f_out.write(b'\x00')
-
-        # Reserve space for IV_SIZE + HMAC_SHA256_SIZE, rounded to a multiple of AES_BLOCK_SIZE
-        reserve = IV_SIZE + HMAC_SHA256_SIZE
-        reserve = ((reserve + AES_BLOCK_SIZE - 1) // AES_BLOCK_SIZE) * AES_BLOCK_SIZE
-
-        # Process each page
-        cur_page = 0
-        while True:
-
-            # For the first page, include SALT_SIZE adjustment
-            if cur_page == 0:
-                # Read one full PAGE_SIZE starting from after the salt
-                page = f_in.read(PAGE_SIZE - SALT_SIZE)
-                if not page:
-                    break  # No more data
-                page = salt + page  # Include the salt in the first page data
-            else:
-                page = f_in.read(PAGE_SIZE)
-            if not page:
-                break  # End of file
-            # print(f'第{cur_page + 1}页')
-            offset = SALT_SIZE if cur_page == 0 else 0
-            end = len(page)
-
-            # If the page is all zero bytes, append it directly and exit
-            if all(x == 0 for x in page):
-                f_out.write(page)
-                print("Exiting early due to zeroed page.")
-                break
-
-            # Perform HMAC check
-            mac = hmac.new(mac_key, page[offset:end - reserve + IV_SIZE], SHA512)
-            mac.update(struct.pack('<I', cur_page + 1))  # Add page number
-            hash_mac = mac.digest()
-
-            # Check if HMAC matches
-            hash_mac_start_offset = end - reserve + IV_SIZE
-            if hash_mac != page[hash_mac_start_offset:hash_mac_start_offset + len(hash_mac)]:
-                print(f'Key error: {key}')
-                return None
-                raise ValueError("Hash verification failed")
-
-            # AES-256-CBC decryption
-            iv = page[end - reserve:end - reserve + IV_SIZE]
-            cipher = AES.new(key, AES.MODE_CBC, iv)
-            decrypted_data = cipher.decrypt(page[offset:end - reserve])
-
-            # Remove padding
-            pad_len = decrypted_data[-1]
-            # decrypted_data = decrypted_data[:-pad_len]
-
-            # Write decrypted data and HMAC/IV to output
-            f_out.write(decrypted_data)
-            f_out.write(page[end - reserve:end])
-
-            cur_page += 1
-
-    # print("Decryption completed.")
-    return True
+        return _page_hmac_matches(
+            page=page,
+            mac_key=mac_key,
+            page_number=1,
+            offset=SALT_SIZE,
+        )
+    except (OSError, ValueError):
+        return False
 
 
-def decode_wrapper(tasks):
-    """用于包装解码函数的顶层定义"""
-    return decrypt_db_file_v4(*tasks)
+def decrypt_db_file_v4(
+    pkey: str,
+    in_db_path: str,
+    out_db_path: str,
+) -> bool:
+    """Decrypt one WeChat 4.x database file."""
+    normalized_key = _normalize_hex_key(pkey)
+    if normalized_key is None:
+        return False
+
+    if not os.path.isfile(in_db_path):
+        print(f"[DECRYPT ERROR] Database does not exist: {in_db_path}")
+        return False
+
+    os.makedirs(os.path.dirname(out_db_path) or ".", exist_ok=True)
+    temp_output_path = f"{out_db_path}.part"
+
+    try:
+        with open(in_db_path, "rb") as f_in, open(
+            temp_output_path,
+            "wb",
+        ) as f_out:
+            salt = f_in.read(SALT_SIZE)
+            if len(salt) != SALT_SIZE:
+                return False
+
+            key, mac_key = _derive_keys(normalized_key, salt)
+            reserve = _reserve_size()
+
+            f_out.write(SQLITE_HEADER)
+            f_out.write(b"\x00")
+
+            current_page = 0
+            decrypted_page_count = 0
+
+            while True:
+                if current_page == 0:
+                    encrypted_part = f_in.read(PAGE_SIZE - SALT_SIZE)
+                    if not encrypted_part:
+                        break
+                    if len(encrypted_part) != PAGE_SIZE - SALT_SIZE:
+                        return False
+                    page = salt + encrypted_part
+                else:
+                    page = f_in.read(PAGE_SIZE)
+                    if not page:
+                        break
+                    if len(page) != PAGE_SIZE:
+                        return False
+
+                offset = SALT_SIZE if current_page == 0 else 0
+                end = len(page)
+
+                if all(value == 0 for value in page):
+                    f_out.write(page[offset:])
+                    current_page += 1
+                    decrypted_page_count += 1
+                    continue
+
+                if not _page_hmac_matches(
+                    page=page,
+                    mac_key=mac_key,
+                    page_number=current_page + 1,
+                    offset=offset,
+                ):
+                    return False
+
+                iv_start = end - reserve
+                iv = page[iv_start:iv_start + IV_SIZE]
+                encrypted_data = page[offset:iv_start]
+
+                if len(encrypted_data) % AES_BLOCK_SIZE != 0:
+                    return False
+
+                cipher = AES.new(key, AES.MODE_CBC, iv)
+                decrypted_data = cipher.decrypt(encrypted_data)
+
+                f_out.write(decrypted_data)
+                f_out.write(page[iv_start:end])
+
+                current_page += 1
+                decrypted_page_count += 1
+
+        if decrypted_page_count == 0:
+            return False
+
+        os.replace(temp_output_path, out_db_path)
+        return True
+
+    except (OSError, ValueError) as exc:
+        print(f"[DECRYPT ERROR] {in_db_path}: {exc}")
+        return False
+    finally:
+        if os.path.exists(temp_output_path):
+            try:
+                os.remove(temp_output_path)
+            except OSError:
+                pass
 
 
-def decrypt_db_files(key, src_dir: str, dest_dir: str):
-    if not os.path.exists(src_dir):
-        print(f"Source file {src_dir} does not exist.")
-        return
+def decode_wrapper(task: tuple[str, str, str]) -> dict[str, Any]:
+    """Run one decryption task in a worker process."""
+    pkey, in_db_path, out_db_path = task
 
-    if not os.path.exists(dest_dir):
-        os.makedirs(dest_dir)  # 如果目标文件夹不存在，创建它
-    decrypt_tasks = []
-    for root, dirs, files in os.walk(src_dir):
-        for file in files:
-            if file.endswith(".db"):
-                # 构造源文件和目标文件的完整路径
-                src_file_path = os.path.join(root, file)
+    try:
+        ok = decrypt_db_file_v4(
+            pkey=pkey,
+            in_db_path=in_db_path,
+            out_db_path=out_db_path,
+        )
+        return {
+            "ok": ok,
+            "source": in_db_path,
+            "output": out_db_path,
+            "error": None if ok else "key mismatch or decryption failed",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "source": in_db_path,
+            "output": out_db_path,
+            "error": repr(exc),
+        }
 
-                # 计算目标路径，保持子文件夹结构
-                relative_path = os.path.relpath(root, src_dir)
-                dest_sub_dir = os.path.join(dest_dir, relative_path)
-                dest_file_path = os.path.join(dest_sub_dir, file)
 
-                # 确保目标子文件夹存在
-                if not os.path.exists(dest_sub_dir):
-                    os.makedirs(dest_sub_dir)
-                # print(dest_file_path)
-                decrypt_tasks.append((key, src_file_path, dest_file_path))
-                # decrypt_db_file_v4(key, src_file_path, dest_file_path)
-    with ProcessPoolExecutor(max_workers=16) as executor:
-        results = list(executor.map(decode_wrapper, decrypt_tasks))  # 使用顶层定义的函数
+def decrypt_db_files(
+    key: str,
+    src_dir: str,
+    dest_dir: str,
+) -> dict[str, Any]:
+    """Decrypt all .db files and return a structured summary."""
+    normalized_key = _normalize_hex_key(key)
+    if normalized_key is None:
+        return {
+            "ok": False,
+            "key_valid": False,
+            "total_count": 0,
+            "success_count": 0,
+            "failed_count": 0,
+            "failed_files": [],
+            "message": "Key must contain exactly 64 hexadecimal characters",
+        }
+
+    if not os.path.isdir(src_dir):
+        return {
+            "ok": False,
+            "key_valid": False,
+            "total_count": 0,
+            "success_count": 0,
+            "failed_count": 0,
+            "failed_files": [],
+            "message": f"Source directory does not exist: {src_dir}",
+        }
+
+    decrypt_tasks: list[tuple[str, str, str]] = []
+
+    for root, _dirs, files in os.walk(src_dir):
+        for file_name in files:
+            if not file_name.lower().endswith(".db"):
+                continue
+
+            src_file_path = os.path.join(root, file_name)
+            relative_path = os.path.relpath(root, src_dir)
+            dest_sub_dir = os.path.join(dest_dir, relative_path)
+            dest_file_path = os.path.join(dest_sub_dir, file_name)
+
+            decrypt_tasks.append(
+                (
+                    normalized_key,
+                    src_file_path,
+                    dest_file_path,
+                )
+            )
+
+    if not decrypt_tasks:
+        return {
+            "ok": False,
+            "key_valid": False,
+            "total_count": 0,
+            "success_count": 0,
+            "failed_count": 0,
+            "failed_files": [],
+            "message": f"No .db files found in: {src_dir}",
+        }
+
+    # Validate against available database files before creating outputs.
+    key_valid = any(
+        validate_key_v4(normalized_key, task[1])
+        for task in decrypt_tasks
+    )
+    if not key_valid:
+        return {
+            "ok": False,
+            "key_valid": False,
+            "total_count": len(decrypt_tasks),
+            "success_count": 0,
+            "failed_count": len(decrypt_tasks),
+            "failed_files": [],
+            "message": "The key does not match the current database files",
+        }
+
+    os.makedirs(dest_dir, exist_ok=True)
+
+    max_workers = min(
+        16,
+        max(1, os.cpu_count() or 1),
+        len(decrypt_tasks),
+    )
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        results = list(executor.map(decode_wrapper, decrypt_tasks))
+
+    failed_results = [result for result in results if not result["ok"]]
+    success_count = len(results) - len(failed_results)
+
+    return {
+        "ok": success_count > 0,
+        "key_valid": True,
+        "total_count": len(results),
+        "success_count": success_count,
+        "failed_count": len(failed_results),
+        "failed_files": failed_results,
+        "message": f"Decrypted {success_count}/{len(results)} database files",
+    }
