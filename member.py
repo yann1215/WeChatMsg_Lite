@@ -19,8 +19,6 @@ def get_member(
     use_cache_db: bool = True,
     use_cache_key: bool = True,
     force_decrypt: bool = False,
-    force_find_key: bool = False,
-    allow_manual_key_input: bool = True,
     key_input_func: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
 
@@ -59,8 +57,6 @@ def get_member(
             use_cache_db=use_cache_db,
             use_cache_key=use_cache_key,
             force_decrypt=force_decrypt,
-            force_find_key=force_find_key,
-            allow_manual_key_input=allow_manual_key_input,
             key_input_func=key_input_func,
         )
 
@@ -251,7 +247,6 @@ if __name__ == "__main__":
         use_cache_db=False,
         use_cache_key=True,
         force_decrypt=True,
-        force_find_key=False,
     )
 
     print(result)

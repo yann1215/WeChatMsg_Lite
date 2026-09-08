@@ -461,6 +461,110 @@ def worker(pid, queue):
     queue.put(nickname_dic)
 
 
+def dump_wechat_account_info_v4(
+    pid: int,
+) -> WeChatInfo | None:
+    """
+    获取微信 4.0 数据库定位所需的最小账户信息。
+
+    仅获取：
+    - wx_dir
+    - wxid
+
+    不获取：
+    - 数据库 Key
+    - nickname
+    - phone
+    - account_name
+    """
+
+    wechat_info = WeChatInfo()
+
+    wechat_info.pid = pid
+    wechat_info.version = get_version(pid)
+
+    process_handle = open_process(pid)
+
+    if not process_handle:
+        print(
+            f"[ERROR] Failed to open Weixin process: {pid}"
+        )
+        wechat_info.errcode = 404
+        return wechat_info
+
+    try:
+        # get_wx_dir() 当前返回类似：
+        #
+        # D:\...\xwechat_files\
+        # wxid_xxxxx_xxx\db_storage\
+        #
+        db_storage_dir = get_wx_dir(
+            process_handle
+        )
+
+        if not db_storage_dir:
+            wechat_info.errcode = 404
+            return wechat_info
+
+        # 去除末尾 \ 或 /
+        db_storage_dir = (
+            db_storage_dir.rstrip("\\/")
+        )
+
+        # db_storage 的上一级就是账号目录
+        #
+        # D:\...\xwechat_files\
+        # wxid_xxxxx_xxx
+        account_dir = os.path.dirname(
+            db_storage_dir
+        )
+
+        account_folder = os.path.basename(
+            account_dir
+        )
+
+        # --------------------------------
+        # 从目录名推导 wxid
+        # --------------------------------
+        #
+        # 保持原项目已有规则：
+        #
+        # wxid_xxxxx_123456
+        #
+        # ↓
+        #
+        # wxid_xxxxx
+        #
+        parts = account_folder.split("_")
+
+        if len(parts) > 1:
+            wechat_info.wxid = "_".join(
+                parts[:-1]
+            )
+        else:
+            wechat_info.wxid = account_folder
+
+        wechat_info.wx_dir = account_dir
+
+        # --------------------------------
+        # 不再获取任何非必要用户信息
+        # --------------------------------
+
+        wechat_info.key = None
+        wechat_info.nick_name = ""
+        wechat_info.phone = ""
+        wechat_info.account_name = ""
+
+        wechat_info.errcode = 200
+
+        return wechat_info
+
+    finally:
+        ctypes.windll.kernel32.CloseHandle(
+            process_handle
+        )
+
+
 def dump_wechat_info_v4(pid) -> WeChatInfo | None:
     wechat_info = WeChatInfo()
     wechat_info.pid = pid

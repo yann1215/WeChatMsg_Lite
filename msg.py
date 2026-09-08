@@ -33,9 +33,7 @@ def get_msg(
     use_cache_db: bool = False,     # 不复用旧的解密后数据库目录
     use_cache_key: bool = True,     # 强制重新解密微信数据库
     force_decrypt: bool = True,     # 可以复用之前找到的 key，减少找 key 的步骤
-    force_find_key: bool = False,   # 不强制重新找 key
 
-    allow_manual_key_input: bool = True,
     key_input_func: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     """
@@ -65,8 +63,6 @@ def get_msg(
             use_cache_db=use_cache_db,
             use_cache_key=use_cache_key,
             force_decrypt=force_decrypt,
-            force_find_key=force_find_key,
-            allow_manual_key_input=allow_manual_key_input,
             key_input_func=key_input_func,
         )
 
@@ -249,7 +245,6 @@ if __name__ == "__main__":
         use_cache_db = False,
         use_cache_key = True,
         force_decrypt = True,
-        force_find_key = False,
     )
 
     print(result)

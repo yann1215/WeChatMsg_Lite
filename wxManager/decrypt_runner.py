@@ -15,19 +15,202 @@ from wxManager.decrypt.decrypt_dat import get_decode_code_v4
 
 KeyInputFunc = Callable[[str], str]
 
-_AUTO_COMMANDS = {
-    "auto",
-    "自动",
-    "自动识别",
-    "自动检测",
-    "自动获取",
-    "重新识别",
-    "重新检测",
-    "重新获取",
-    "retryauto",
-}
 _EXIT_COMMANDS = {"q", "quit", "exit", "cancel", "退出", "取消"}
 _HEX_KEY_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def ensure_cached_decrypt_key(
+    db_version: int = 4,
+    source_dir: str | None = None,
+    output_root: str = ".",
+    key_input_func: KeyInputFunc | None = None,
+) -> dict[str, Any]:
+    """
+    启动阶段检查微信数据库 key。
+
+    处理逻辑：
+    1. 已存在可用缓存 key -> 直接返回
+    2. 没有缓存 key -> 立即要求用户输入
+    3. 检查 key 格式
+    4. 使用微信原始数据库验证 key
+    5. 验证成功后写入 decrypt_cache.json
+
+    注意：
+   这里只验证并缓存 key，不执行完整数据库解密。
+    """
+    try:
+        if db_version != 4:
+            return _fail(f"不支持的 db_version：{db_version}")
+
+        output_root_path = Path(output_root).expanduser().resolve()
+        output_root_path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        cache_path = _get_cache_path(output_root_path)
+        cache = _load_cache(output_root_path)
+
+        # -------------------------
+        # 1. 已存在可用缓存 key
+        # -------------------------
+        cached_key_info = _get_cached_key_info(
+            cache=cache,
+            db_version=db_version,
+            source_dir=source_dir,
+        )
+
+        if cached_key_info:
+            return {
+                "ok": True,
+                "message": "已找到缓存微信数据库 key",
+                "key_source": "cache",
+                "cache_path": str(cache_path),
+            }
+
+        # -------------------------
+        # 2. 没有 key，立即要求输入
+        # -------------------------
+        provider = key_input_func or input
+
+        last_error = ""
+
+        while True:
+            prompt = (
+                "未检测到微信数据库 Key。\n"
+                "请输入 64 位十六进制数据库 Key。"
+            )
+
+            if last_error:
+                prompt += (
+                    f"\n\n{last_error}\n"
+                    "请重新输入正确的 Key。"
+                )
+
+            try:
+                raw_value = provider(prompt)
+            except (EOFError, KeyboardInterrupt):
+                return _fail("用户取消输入数据库 key")
+            except Exception as exc:
+                return _fail(
+                    f"读取用户输入失败：{exc}"
+                )
+
+            raw_value = str(
+                raw_value or ""
+            ).strip()
+
+            if not raw_value:
+                last_error = "Key 不能为空。"
+                continue
+
+            command = _normalize_command(raw_value)
+
+            if command in _EXIT_COMMANDS:
+                return _fail(
+                    "用户取消输入数据库 key"
+                )
+
+            key = _normalize_key(raw_value)
+
+            # -------------------------
+            # 3. 格式校验
+            # -------------------------
+            if not _is_valid_key(key):
+                last_error = (
+                    "Key 格式不正确，应为 "
+                    "64 个十六进制字符。"
+                )
+                continue
+
+            # -------------------------
+            # 4. 获取当前微信账户信息
+            # -------------------------
+            account_info = _resolve_v4_account_info(
+                source_dir=source_dir,
+                output_root=output_root_path,
+            )
+
+            if account_info is None:
+                return _fail(
+                    "无法确定微信原始数据库目录。"
+                    "请确认微信已经登录。"
+                )
+
+            wx_dir = _normalize_source_root(
+                account_info["source_dir"]
+            )
+
+            db_storage_dir = (
+                wx_dir / "db_storage"
+            )
+
+            if not db_storage_dir.is_dir():
+                return _fail(
+                    "没有找到微信数据库目录："
+                    f"{db_storage_dir}"
+                )
+
+            validation_db = _find_validation_db(
+                db_storage_dir
+            )
+
+            if validation_db is None:
+                return _fail(
+                    "没有找到可用于验证 Key 的"
+                    "微信数据库文件。"
+                )
+
+            # -------------------------
+            # 5. 验证 key
+            # -------------------------
+            try:
+                key_matches = (
+                    decrypt_v4.validate_key_v4(
+                        key,
+                        str(validation_db),
+                    )
+                )
+            except Exception as exc:
+                last_error = (
+                    f"验证数据库 Key 时出错：{exc}"
+                )
+                continue
+
+            if not key_matches:
+                last_error = (
+                    "输入的 Key 与当前微信数据库"
+                    "不匹配。"
+                )
+                continue
+
+            # -------------------------
+            # 6. 验证成功，缓存 key
+            # -------------------------
+            _update_cache(
+                output_root_path,
+                db_version=db_version,
+                wxid=account_info["wxid"],
+                source_dir=_norm_path(
+                    account_info["source_dir"]
+                ),
+                key=key,
+            )
+
+            return {
+                "ok": True,
+                "message": (
+                    "微信数据库 Key 验证成功，"
+                    "已写入缓存"
+                ),
+                "key_source": "manual",
+                "cache_path": str(cache_path),
+            }
+
+    except Exception as exc:
+        return _fail(
+            f"检查微信数据库 Key 失败：{exc}"
+        )
 
 
 def decrypt_wechat_database(
@@ -37,24 +220,21 @@ def decrypt_wechat_database(
     use_cache_db: bool = True,
     use_cache_key: bool = True,
     force_decrypt: bool = False,
-    force_find_key: bool = False,
-    allow_manual_key_input: bool = False,
     key_input_func: KeyInputFunc | None = None,
 ) -> dict[str, Any]:
     """
-    自动解析/解密微信数据库，支持两层缓存和手动输入 key。
+    解析并解密微信数据库。
 
     处理顺序：
-    1. 可选：直接使用缓存 db_dir。
-    2. 可选：使用缓存 key 解密最新数据库。
-    3. 自动检测 key。
-    4. 自动检测失败时，可进入手动输入循环。
 
-    手动输入循环支持：
-    - 64 位十六进制 key；
-    - auto / 自动识别 / 自动获取等命令，重新自动检测 key；
-    - quit / exit / 退出 / 取消，终止输入。
+    1. 可选：直接使用已经解密好的数据库缓存。
+    2. 可选：使用缓存中的数据库 Key。
+    3. 如果没有有效缓存 Key，则要求用户手动输入。
+    4. 手动 Key 验证成功后写入缓存并进行解密。
+
+    本函数不会自动从微信进程中获取数据库 Key。
     """
+
     try:
         output_root_path = Path(output_root).expanduser().resolve()
         output_root_path.mkdir(parents=True, exist_ok=True)
@@ -81,7 +261,7 @@ def decrypt_wechat_database(
                 )
 
         # 第二层缓存：用缓存 key 解密最新数据库。
-        if use_cache_key and not force_find_key:
+        if use_cache_key:
             cached_key_info = _get_cached_key_info(
                 cache=cache,
                 db_version=db_version,
@@ -115,36 +295,13 @@ def decrypt_wechat_database(
                 )
                 _remove_cached_key(output_root_path)
 
-        # 第三步：自动检测 key。
-        if db_version != 4:
-            return _fail(f"不支持的 db_version：{db_version}")
-
-        auto_result = _dump_v4_find_key(
-            source_dir=source_dir,
-            output_root=output_root_path,
-        )
-        if auto_result.get("ok"):
-            detected_key = auto_result.pop("_key", None)
-            nick_name = auto_result.pop("_nick_name", None)
-            return _finalize_success(
-                result=auto_result,
-                output_root=output_root_path,
-                db_version=db_version,
-                key=detected_key,
-                nick_name=nick_name,
-                key_source="auto",
-                from_cache_key=False,
-            )
-
-        if not allow_manual_key_input:
-            return auto_result
-
-        # 第四步：自动识别失败，进入手动输入循环。
         return _manual_key_retry_loop(
             source_dir=source_dir,
             output_root=output_root_path,
             db_version=db_version,
-            initial_error=auto_result.get("message") or "自动识别 key 失败",
+            initial_error=(
+                "没有找到可用的缓存数据库 Key"
+            ),
             key_input_func=key_input_func,
         )
 
@@ -168,13 +325,13 @@ def _manual_key_retry_loop(
     initial_error: str,
     key_input_func: KeyInputFunc | None,
 ) -> dict[str, Any]:
+
     provider = key_input_func or input
     last_error = initial_error
 
     print(f"[decrypt] 自动获取 key 失败：{last_error}")
     print(
         "请输入 64 位十六进制数据库 key；"
-        "输入 auto/自动识别可重新自动获取；"
         "输入 quit/退出可取消。"
     )
 
@@ -195,34 +352,6 @@ def _manual_key_retry_loop(
 
         if command in _EXIT_COMMANDS:
             return _fail("用户取消输入数据库 key")
-
-        if command in _AUTO_COMMANDS:
-            print("[decrypt] 正在重新自动识别 key……")
-
-            # 用户明确要求重新识别时，先移除已有 key，避免下次再次使用旧值。
-            _remove_cached_key(output_root)
-
-            auto_result = _dump_v4_find_key(
-                source_dir=source_dir,
-                output_root=output_root,
-            )
-            if auto_result.get("ok"):
-                detected_key = auto_result.pop("_key", None)
-                nick_name = auto_result.pop("_nick_name", None)
-                return _finalize_success(
-                    result=auto_result,
-                    output_root=output_root,
-                    db_version=db_version,
-                    key=detected_key,
-                    nick_name=nick_name,
-                    key_source="auto",
-                    from_cache_key=False,
-                )
-
-            last_error = auto_result.get("message") or "自动识别 key 失败"
-            print(f"[decrypt] 自动识别仍然失败：{last_error}")
-            print("请手动输入 key，或再次输入 auto 重试。")
-            continue
 
         manual_key = _normalize_key(raw_value)
         if not _is_valid_key(manual_key):
@@ -526,48 +655,6 @@ def _dump_v4_with_key(
     )
 
 
-def _dump_v4_find_key(
-    source_dir: str | None,
-    output_root: Path,
-) -> dict[str, Any]:
-    """重新检测微信 4.0 key，并解密数据库。"""
-    try:
-        wx_info_list = get_info_v4()
-    except Exception as e:
-        return _fail(f"自动检测微信信息失败：{e}")
-
-    if not wx_info_list:
-        return _fail(
-            "未检测到微信 4.0 信息。"
-            "请确认微信已登录，或在调用时手动传入 source_dir。"
-        )
-
-    wx_info = _select_wx_info(wx_info_list, source_dir)
-    if wx_info is None:
-        return _fail(f"未找到匹配的微信原始目录：{source_dir}")
-
-    key = _normalize_key(str(getattr(wx_info, "key", "") or ""))
-    if not _is_valid_key(key):
-        return _fail("自动检测未找到有效数据库 key")
-
-    wx_dir = source_dir or getattr(wx_info, "wx_dir", None)
-    if not wx_dir:
-        return _fail("自动检测到了 key，但没有找到微信原始数据库目录")
-
-    result = _dump_v4_with_key(
-        key=key,
-        wxid=str(getattr(wx_info, "wxid", "") or Path(wx_dir).name),
-        wx_dir=str(wx_dir),
-        nick_name=getattr(wx_info, "nick_name", None),
-        output_root=output_root,
-    )
-
-    if result.get("ok"):
-        result["_key"] = key
-        result["_nick_name"] = getattr(wx_info, "nick_name", None)
-    return result
-
-
 def _resolve_v4_account_info(
     source_dir: str | None,
     output_root: Path,
@@ -595,7 +682,6 @@ def _resolve_v4_account_info(
                     or cache.get("wxid")
                     or wx_dir.name
                 ),
-                "nick_name": getattr(wx_info, "nick_name", None),
                 "source_dir": str(wx_dir),
             }
 
@@ -609,7 +695,6 @@ def _resolve_v4_account_info(
 
     return {
         "wxid": str(cache.get("wxid") or wx_dir.name),
-        "nick_name": cache.get("nick_name"),
         "source_dir": str(wx_dir),
     }
 
@@ -707,10 +792,10 @@ def _finalize_success(
     output_root: Path,
     db_version: int,
     key: str | None,
-    nick_name: str | None,
     key_source: str,
     from_cache_key: bool,
 ) -> dict[str, Any]:
+
     if not key or not _is_valid_key(_normalize_key(key)):
         return _fail("数据库已经解密，但没有获得可写入缓存的有效 key")
 
@@ -719,7 +804,6 @@ def _finalize_success(
         output_root,
         db_version=db_version,
         wxid=result.get("wxid"),
-        nick_name=nick_name,
         source_dir=_norm_path(result.get("source_dir")),
         db_dir=_norm_path(result.get("db_dir")),
         key=normalized_key,
@@ -732,8 +816,6 @@ def _finalize_success(
 
     if key_source == "manual":
         result["message"] = "手动输入 key 验证成功，已写入缓存并完成解密"
-    elif key_source == "auto":
-        result["message"] = "自动识别 key 成功，已写入缓存并完成解密"
     elif key_source == "cache":
         result["message"] = "使用缓存 key 重新解密成功"
 
