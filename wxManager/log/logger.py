@@ -1,24 +1,35 @@
 import logging
-import os
 import time
 import traceback
 from functools import wraps
-filename = time.strftime("%Y-%m-%d", time.localtime(time.time()))
-logger = logging.getLogger('test')
-logger.setLevel(level=logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-try:
-    if not os.path.exists('./app/log/logs'):
-        os.mkdir('./app/log/logs')
-    file_handler = logging.FileHandler(f'./app/log/logs/{filename}-log.log', encoding='utf-8')
-except:
-    file_handler = logging.FileHandler(f'日志文件-{filename}-log.log', encoding='utf-8')
+from pathlib import Path
 
-file_handler.setLevel(level=logging.INFO)
+filename = time.strftime("%Y-%m-%d", time.localtime())
+
+logger = logging.getLogger("wechat_msg_lite")
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - "
+    "%(filename)s[line:%(lineno)d] - "
+    "%(levelname)s: %(message)s"
+)
+
+log_dir = Path.cwd() / "logs" / "wechat_msg_lite"
+log_dir.mkdir(parents=True, exist_ok=True)
+
+file_handler = logging.FileHandler(
+    log_dir / f"{filename}.log",
+    encoding="utf-8",
+)
+
+file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
+
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.DEBUG)
 stream_handler.setFormatter(formatter)
+
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
