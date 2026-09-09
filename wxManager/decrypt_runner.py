@@ -275,7 +275,6 @@ def decrypt_wechat_database(
                     key=cached_key_info["key"],
                     wxid=cached_key_info["wxid"],
                     wx_dir=cached_key_info["source_dir"],
-                    nick_name=cached_key_info.get("nick_name"),
                     output_root=output_root_path,
                 )
                 if result.get("ok"):
@@ -284,7 +283,6 @@ def decrypt_wechat_database(
                         output_root=output_root_path,
                         db_version=db_version,
                         key=cached_key_info["key"],
-                        nick_name=cached_key_info.get("nick_name"),
                         key_source="cache",
                         from_cache_key=True,
                     )
@@ -375,7 +373,6 @@ def _manual_key_retry_loop(
             key=manual_key,
             wxid=account_info["wxid"],
             wx_dir=account_info["source_dir"],
-            nick_name=account_info.get("nick_name"),
             output_root=output_root,
         )
 
@@ -386,7 +383,6 @@ def _manual_key_retry_loop(
                 output_root=output_root,
                 db_version=db_version,
                 key=manual_key,
-                nick_name=account_info.get("nick_name"),
                 key_source="manual",
                 from_cache_key=False,
             )
@@ -534,7 +530,6 @@ def _get_cached_key_info(
         "key": key,
         "wxid": str(wxid),
         "source_dir": str(_normalize_source_root(cached_source_dir)),
-        "nick_name": cache.get("nick_name"),
     }
 
 
@@ -560,7 +555,6 @@ def _dump_v4_with_key(
     key: str,
     wxid: str,
     wx_dir: str,
-    nick_name: str | None,
     output_root: Path,
 ) -> dict[str, Any]:
     normalized_key = _normalize_key(key)
@@ -593,7 +587,6 @@ def _dump_v4_with_key(
     me = Me()
     me.wx_dir = str(wx_dir_path)
     me.wxid = wxid
-    me.name = nick_name or ""
 
     try:
         me.xor_key = get_decode_code_v4(str(wx_dir_path))
@@ -867,6 +860,5 @@ def debug_wechat_info(db_version: int = 4) -> None:
         print("=" * 60)
         print(f"index: {i}")
         print(f"wxid: {getattr(wx_info, 'wxid', None)}")
-        print(f"nick_name: {getattr(wx_info, 'nick_name', None)}")
         print(f"wx_dir: {getattr(wx_info, 'wx_dir', None)}")
         print(f"has_key: {bool(getattr(wx_info, 'key', None))}")
