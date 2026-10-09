@@ -107,31 +107,40 @@ def _page_hmac_matches(
 
 def validate_key_v4(pkey: str, in_db_path: str) -> bool:
     """Validate a key against the first page without creating output."""
+    return validate_key_v4_detailed(pkey, in_db_path)["ok"]
+
+
+def validate_key_v4_detailed(pkey: str, in_db_path: str) -> dict[str, Any]:
+    """Distinguish a failed HMAC check from unavailable or malformed input."""
     normalized_key = _normalize_hex_key(pkey)
-    if normalized_key is None or not os.path.isfile(in_db_path):
-        return False
+    if normalized_key is None:
+        return {"ok": False, "error_code": "invalid_key", "message": "Key 格式不正确，应为 64 个十六进制字符"}
 
     try:
         with open(in_db_path, "rb") as f_in:
             salt = f_in.read(SALT_SIZE)
             encrypted_part = f_in.read(PAGE_SIZE - SALT_SIZE)
 
-        if len(salt) != SALT_SIZE:
-            return False
-        if len(encrypted_part) != PAGE_SIZE - SALT_SIZE:
-            return False
+        if len(salt) != SALT_SIZE or len(encrypted_part) != PAGE_SIZE - SALT_SIZE:
+            return {"ok": False, "error_code": "invalid_database", "message": "校验数据库第一页不完整"}
+        if (salt + encrypted_part).startswith(SQLITE_HEADER):
+            return {"ok": False, "error_code": "invalid_database", "message": "校验文件是未加密的 SQLite 数据库"}
 
         page = salt + encrypted_part
         _key, mac_key = _derive_keys(normalized_key, salt)
 
-        return _page_hmac_matches(
+        matches = _page_hmac_matches(
             page=page,
             mac_key=mac_key,
             page_number=1,
             offset=SALT_SIZE,
         )
-    except (OSError, ValueError):
-        return False
+        return {"ok": matches, "error_code": None if matches else "key_mismatch",
+                "message": "Key 校验通过" if matches else "Key 与校验数据库不匹配（也可能是文件损坏）"}
+    except OSError as exc:
+        return {"ok": False, "error_code": "validation_read_failed", "message": f"读取校验数据库失败：{exc}"}
+    except ValueError as exc:
+        return {"ok": False, "error_code": "validation_failed", "message": f"校验数据库异常：{exc}"}
 
 
 def decrypt_db_file_v4(

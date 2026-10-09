@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import traceback
+from copy import copy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple
 
@@ -192,15 +193,29 @@ class ExporterBase(ExporterBaseBase):
             return True
         return False
 
-    def save_avatars(self):
+    def load_group_contacts(self):
+        """保留本人在当前群里的成员信息，不用全局 Me 覆盖群昵称。"""
         if self.contact.is_chatroom():
-            self.group_contacts = self.database.get_chatroom_members(self.contact.wxid)
-            self.group_contacts[Me().wxid] = Me()
+            self.group_contacts = dict(self.database.get_chatroom_members(self.contact.wxid))
+            me = Me()
+            contact = self.group_contacts.get(me.wxid)
+            if contact is None:
+                contact = self.database.get_contact_by_username(me.wxid)
+            # 不修改数据库的群成员缓存，也不把某个群昵称写入全局 Me。
+            contact = copy(contact if contact is not None else me)
+            if not getattr(contact, "nickname", "") or contact.nickname == me.wxid:
+                contact.nickname = me.nickname or me.name or getattr(contact, "nickname", "")
+            if not getattr(contact, "remark", "") or contact.remark == me.wxid:
+                contact.remark = getattr(contact, "group_nickname", "") or contact.nickname
+            self.group_contacts[me.wxid] = contact
         else:
             self.group_contacts = {
                 Me().wxid: Me(),
                 self.contact.wxid: self.contact
             }
+
+    def save_avatars(self):
+        self.load_group_contacts()
         for wxid, contact in self.group_contacts.items():
             self.save_avatar(contact)
 

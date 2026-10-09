@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -24,6 +25,8 @@ def ensure_cached_decrypt_key(
     source_dir: str | None = None,
     output_root: str = ".",
     key_input_func: KeyInputFunc | None = None,
+    force_update: bool = False,
+    initial_key: str = "",
 ) -> dict[str, Any]:
     """
     启动阶段检查微信数据库 key。
@@ -60,7 +63,7 @@ def ensure_cached_decrypt_key(
             source_dir=source_dir,
         )
 
-        if cached_key_info:
+        if cached_key_info and not force_update:
             return {
                 "ok": True,
                 "message": "已找到缓存微信数据库 key",
@@ -74,11 +77,14 @@ def ensure_cached_decrypt_key(
         provider = key_input_func or input
 
         last_error = ""
+        pending_key = _normalize_key(initial_key)
+        if len(pending_key) != 64:
+            pending_key = ""
 
         while True:
             prompt = (
-                "未检测到微信数据库 Key。\n"
-                "请输入 64 位十六进制数据库 Key。"
+                ("更新微信数据库 Key，验证成功后替换原 Key。\n" if force_update else "未检测到微信数据库 Key。\n")
+                + "请输入 64 位十六进制数据库 Key。"
             )
 
             if last_error:
@@ -88,7 +94,10 @@ def ensure_cached_decrypt_key(
                 )
 
             try:
-                raw_value = provider(prompt)
+                if pending_key:
+                    raw_value, pending_key = pending_key, ""
+                else:
+                    raw_value = provider(prompt)
             except (EOFError, KeyboardInterrupt):
                 return _fail("用户取消输入数据库 key")
             except Exception as exc:
@@ -165,8 +174,8 @@ def ensure_cached_decrypt_key(
             # 5. 验证 key
             # -------------------------
             try:
-                key_matches = (
-                    decrypt_v4.validate_key_v4(
+                validation = (
+                    decrypt_v4.validate_key_v4_detailed(
                         key,
                         str(validation_db),
                     )
@@ -177,7 +186,10 @@ def ensure_cached_decrypt_key(
                 )
                 continue
 
-            if not key_matches:
+            if validation["error_code"] not in (None, "key_mismatch"):
+                return _fail("无法验证新 Key，原缓存未修改：" + validation["message"])
+
+            if not validation["ok"]:
                 last_error = (
                     "输入的 Key 与当前微信数据库"
                     "不匹配。"
@@ -187,15 +199,19 @@ def ensure_cached_decrypt_key(
             # -------------------------
             # 6. 验证成功，缓存 key
             # -------------------------
-            _update_cache(
-                output_root_path,
+            updated_cache = _load_cache(output_root_path)
+            # 新 key/账户录入后不再复用旧 db_dir，下一次操作重新解密。
+            updated_cache.pop("db_dir", None)
+            updated_cache.update(
                 db_version=db_version,
                 wxid=account_info["wxid"],
                 source_dir=_norm_path(
                     account_info["source_dir"]
                 ),
                 key=key,
+                updated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
+            _save_cache(output_root_path, updated_cache)
 
             return {
                 "ok": True,
@@ -287,11 +303,8 @@ def decrypt_wechat_database(
                         from_cache_key=True,
                     )
 
-                print(
-                    "[decrypt cache] 缓存 key 与当前数据库不匹配，"
-                    "将清除缓存 key 并尝试自动识别。"
-                )
-                _remove_cached_key(output_root_path)
+                result["message"] += "。原 Key 已保留；如需更换，请输入“更新key”或“更新密钥”。"
+                return result
 
         return _manual_key_retry_loop(
             source_dir=source_dir,
@@ -417,8 +430,16 @@ def _load_cache(output_root: Path) -> dict[str, Any]:
 def _save_cache(output_root: Path, cache: dict[str, Any]) -> None:
     cache_path = _get_cache_path(output_root)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    fd, temporary = tempfile.mkstemp(prefix=".decrypt_cache-", suffix=".json", dir=cache_path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, cache_path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def _update_cache(output_root: Path, **kwargs: Any) -> None:
@@ -559,30 +580,30 @@ def _dump_v4_with_key(
 ) -> dict[str, Any]:
     normalized_key = _normalize_key(key)
     if not _is_valid_key(normalized_key):
-        return _fail("数据库 key 格式不正确，应为 64 个十六进制字符")
+        return _fail("数据库 key 格式不正确，应为 64 个十六进制字符", error_code="invalid_key")
 
     wx_dir_path = _normalize_source_root(wx_dir)
     if not wx_dir_path.exists():
-        return _fail(f"微信原始目录不存在：{wx_dir_path}")
+        return _fail(f"微信原始目录不存在：{wx_dir_path}", error_code="source_unavailable")
 
     db_storage_dir = wx_dir_path / "db_storage"
     if not db_storage_dir.is_dir():
-        return _fail(f"微信原始目录中不存在 db_storage：{db_storage_dir}")
+        return _fail(f"微信原始目录中不存在 db_storage：{db_storage_dir}", error_code="source_unavailable")
 
     validation_db = _find_validation_db(db_storage_dir)
     if validation_db is None:
-        return _fail(f"没有找到可用于校验 key 的数据库：{db_storage_dir}")
+        return _fail(f"没有找到可用于校验 key 的数据库：{db_storage_dir}", error_code="validation_unavailable")
 
     try:
-        key_matches = decrypt_v4.validate_key_v4(
+        validation = decrypt_v4.validate_key_v4_detailed(
             normalized_key,
             str(validation_db),
         )
     except Exception as e:
-        return _fail(f"校验数据库 key 时出错：{e}")
+        return _fail(f"校验数据库 key 时出错：{e}", error_code="validation_failed")
 
-    if not key_matches:
-        return _fail("输入的 key 与当前微信数据库不匹配")
+    if not validation["ok"]:
+        return _fail(validation["message"], error_code=validation["error_code"])
 
     me = Me()
     me.wx_dir = str(wx_dir_path)
@@ -609,20 +630,21 @@ def _dump_v4_with_key(
     except Exception as e:
         if temp_output_dir.exists():
             shutil.rmtree(temp_output_dir, ignore_errors=True)
-        return _fail(f"批量解密数据库失败：{e}")
+        return _fail(f"批量解密数据库失败：{e}", error_code="decrypt_failed")
 
     if not summary.get("ok"):
         shutil.rmtree(temp_output_dir, ignore_errors=True)
         return _fail(
             "数据库批量解密失败："
             f"成功 {summary.get('success_count', 0)} 个，"
-            f"失败 {summary.get('failed_count', 0)} 个"
+            f"失败 {summary.get('failed_count', 0)} 个",
+            error_code="decrypt_failed",
         )
 
     temp_db_dir = temp_output_dir / "db_storage"
     if not _db_dir_is_ready(temp_db_dir):
         shutil.rmtree(temp_output_dir, ignore_errors=True)
-        return _fail("解密结束，但没有生成可用的 db_storage 目录")
+        return _fail("解密结束，但没有生成可用的 db_storage 目录", error_code="output_unavailable")
 
     info_path = temp_db_dir / "info.json"
     with open(info_path, "w", encoding="utf-8") as f:
@@ -635,7 +657,8 @@ def _dump_v4_with_key(
         return _fail(
             "数据库已解密，但替换旧输出目录失败。"
             "请关闭正在占用解密数据库的程序后重试："
-            f"{e}"
+            f"{e}",
+            error_code="output_replace_failed",
         )
 
     db_dir = final_output_dir / "db_storage"
@@ -838,13 +861,14 @@ def _success(
     return result
 
 
-def _fail(message: str) -> dict[str, Any]:
+def _fail(message: str, **extra: Any) -> dict[str, Any]:
     return {
         "ok": False,
         "message": message,
         "db_dir": None,
         "wxid": None,
         "source_dir": None,
+        **extra,
     }
 
 

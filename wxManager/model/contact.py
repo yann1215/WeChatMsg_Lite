@@ -172,6 +172,8 @@ class Me:
             with open(json_file, 'r', encoding='utf-8') as f:
                 dic = json.load(f)
                 self.name = dic.get('nickname', '')
+                self.nickname = self.name
+                self.remark = self.nickname
                 self.wxid = dic.get('username', '')
                 self.wx_dir = dic.get('wx_dir', '')
                 self.xor_key = dic.get('xor_key', '')

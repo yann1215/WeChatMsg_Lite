@@ -81,18 +81,7 @@ class CSVExporter(ExporterBase):
         # print("[CSV DEBUG] time_range =", self.time_range)
 
         try:
-            if self.contact.is_chatroom():
-                self.group_contacts = self.database.get_chatroom_members(self.contact.wxid)
-                # print("[CSV DEBUG] after get_chatroom_members")
-                # print("[CSV DEBUG] group_contacts count =", len(self.group_contacts))
-
-                self.group_contacts[Me().wxid] = Me()
-            else:
-                self.group_contacts = {
-                    Me().wxid: Me(),
-                    self.contact.wxid: self.contact
-                }
-                print("[CSV DEBUG] non-chatroom group_contacts ready")
+            self.load_group_contacts()
 
         except Exception as e:
             print("[CSV ERROR] get_chatroom_members failed:", repr(e))
