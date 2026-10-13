@@ -303,7 +303,6 @@ def decrypt_wechat_database(
                         from_cache_key=True,
                     )
 
-                result["message"] += "。原 Key 已保留；如需更换，请输入“更新key”或“更新密钥”。"
                 return result
 
         return _manual_key_retry_loop(

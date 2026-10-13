@@ -89,7 +89,7 @@ class MessageDB(DataBaseBase):
 select {MessageDB.columns}
 from {table_name} as msg
 join Name2Id on msg.real_sender_id = Name2Id.rowid
-{'where create_time>' + str(start_time) + ' AND create_time<' + str(end_time) if time_range else ''}
+{'where create_time>=' + str(start_time) + ' AND create_time<=' + str(end_time) if time_range else ''}
 order by sort_seq
         '''
         cursor.execute(sql)
@@ -246,7 +246,7 @@ where server_id = ?
 select {MessageDB.columns}
 from {table_name} as msg
 join Name2Id on msg.real_sender_id = Name2Id.rowid
-where local_type=? {'and create_time>' + str(start_time) + ' AND create_time<' + str(end_time) if time_range else ''}
+where local_type=? {'and create_time>=' + str(start_time) + ' AND create_time<=' + str(end_time) if time_range else ''}
 order by sort_seq
         '''
         cursor.execute(sql, [local_type])
